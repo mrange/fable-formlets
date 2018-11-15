@@ -3,6 +3,10 @@ Fable Formlets (Applicative Functor Forms kind of)
 
 > Based upon fable2-samples
 
+## Why formlets
+
+Please see: [Why and what is formlets?](WHY.md)
+
 ## Requirements
 
 * [dotnet SDK](https://www.microsoft.com/net/download/core) 2.0 or higher
