@@ -1,6 +1,6 @@
 # Why and what is formlets?
 
-A few years ago I was trying out [WebSharper](http://websharper.com/). There were much I didn't understand about WebSharper but I fell in love with the concept of Formlets/Piglets. For years I have been trying to make others see it as I do; an awesome and productive way to build reactive Forms that have validation.
+A few years ago I was trying out [WebSharper](http://websharper.com/). There was much I didn't understand about WebSharper but I fell in love with the concept of Formlets/Piglets. For years I have been trying to make others see it as I do; an awesome and productive way to build reactive Forms that have validation.
 
 Formlets are not a generic solution to all UI related problems but they are awesome for Forms (as the name implies).
 
@@ -12,7 +12,7 @@ One of the simplest forms is a simple text input element:
 let f = text "Enter your name" ""
 ```
 
-This would render as a single text input with the hint "Enter your name" and an empty string as the initial value.
+![A single input formlet](images/example-0001.PNG)
 
 We can add a label to it:
 
@@ -20,7 +20,7 @@ We can add a label to it:
 let f = text "Enter your name" "" |> withLabel "name-id" "Name"
 ```
 
-Which will render as a label and text input.
+![A single labeled input formlet](images/example-0002.PNG)
 
 We can create our input formlet with formlet by creating a function
 
@@ -42,10 +42,10 @@ let newUser : Formlet<string*string*string> =
     let! lastName   = input "Last name"  "Enter last name"  notEmpty
     let! nickName   = input "Nick name"  "Enter nick name"  yes
     return firstName, lastName, nickName
-  } |> Bootstrap.withCard "New User"
+  } |> withCard "New User"
 ```
 
-The above renders as a Bootstrap card with the label "New user" and three text input elements for first name, last name and nick name. First name and last name are required which will be shown to the user.
+![A customer formlet](images/example-0003.PNG)
 
 We can make a slight validation of the Formlet above by showing the user a checkbox that they tick if they like to enter a nick name.
 
@@ -59,8 +59,10 @@ let newUser : Formlet<string*string*string option> =
       if hasNick then input "Nick name"  "Enter nick name"  notEmpty |>> Some
       else value None
     return firstName, lastName, nickName
-  } |> Bootstrap.withCard "New User"
+  } |> withCard "New User"
 ```
+
+![A customer formlet](images/example-0004.PNG)
 
 The cool thing is that the user will see a checkbox that when ticked will display a required text input for the nick. Normally optional behavior in forms require some kind of event handling, not so with formlets.
 
