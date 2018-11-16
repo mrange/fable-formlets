@@ -130,6 +130,7 @@ let text hint initial : Formlet<string> =
       | Model.Value v -> v
       | _             -> initial
 
+    // These are the attributes we like to add to the input element
     let aa : IHTMLProp list =
         [
           DefaultValue  v
@@ -137,10 +138,55 @@ let text hint initial : Formlet<string> =
           Placeholder   hint
         ]
 
+    // Construct a view element, it needs to be delayed as it possible
+    //  that styles and attribute will flow from parent formlets to this
+    //  input element
+    //  Class and Style attribute are specified separately because they need to
+    //  be accumulated
+    //  input is normal Fable.elmish input element constructor
+    //  "form-control" is the bootstrap style
     let tvt = delayedElement input aa "form-control" []
 
+    // Returns the value, the view tree and an empty failure tree
     v, tvt, zero ()
 ```
+
+Let's also look at how a label is constructed
+
+```fsharp
+let withLabel id lbl t : Formlet<_> =
+  let t = adapt t
+  Ft <| fun fp m d ->
+    // Update the formlet path with label, this will allow validation
+    //  formlets append the correct context
+    let fp            = (FormletPathElement.Named lbl)::fp
+    // Invoke the labeled formlet
+    let tv, tvt, tft  = invoke t fp m d
+    // Create the label element, this time we don't use delayed elements
+    //  as we don't want parent formlets to modify the style of the label,
+    //  rather the style of the labeled element
+    //  id is the identifier we given to tie the label and the labeled element
+    //  together, future updates could allow an id generator to be passed to the
+    //  allowing formlet implicit ids
+    let e             = label [|HTMLAttr.HtmlFor id|] [|str lbl|]
+    // We add the `Id` attribute to the labeled element
+    let tvt           = ViewTree.WithAttribute (Id id, tvt)
+    // The final view tree is the label and labeled element joined
+    let tvt           = join (ViewTree.Element e) tvt
+
+    // Done, return the value from the labeled element, view tree and failure tree
+    tv, tvt, tft
+```
+
+So it's nice with out of the box input elements but it is possible to extend with new kinds of inputs.
+
+## Conclusion
+
+In my opinion, Formlets are great for building forms, they are extendable, they work great with Fable.Elmish.
+
+`fable-formlets` might not be right implementation of formlets for Fable.Elmish, perhaps someone more clever can pick up the idea and do a proper implementation.
+
+_Let's talk about formlets._
 
 ## References
 
