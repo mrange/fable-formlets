@@ -41,18 +41,6 @@ type FailureTree =
     | _           , Empty       -> l
     | Suppress l  , Suppress r  -> Suppress (Fork (l, r))
     | _           , _           -> Fork (l, r)
-  static member Flatten ft  : (bool*FormletPath*string) array =
-    let ra = ResizeArray<_> 16
-    let rec loop suppress ft =
-      match ft with
-      | FailureTree.Empty       -> ()
-      | FailureTree.Leaf (p, m) -> ra.Add (suppress, p, m)
-      | FailureTree.Suppress ft -> loop true ft
-      | FailureTree.Fork (l, r) ->
-        loop suppress l
-        loop suppress r
-    loop false ft
-    ra.ToArray ()
 
 /// Model of the Formlet state
 [<RequireQualifiedAccess>]
@@ -78,6 +66,13 @@ type ModelUpdate =
 type ViewTree =
   | Empty
   | Element         of ReactElement
+  // DelayedElement is needed when an element should render differently depending
+  //  on the validation results or attributes attached using with(Attribute|Class|Style)
+  //  The reason for this design is that elements are immutable after construction but
+  //  a validation error is usually discovered after the visual element is created in
+  //  the tree. An alternative implementation would be to instead pass the validation
+  //  function when traversing the formlets and evaluate it when creating the visual
+  //  element. This design felt more complex but potentially more performant.
   | DelayedElement  of (IHTMLProp list -> string -> CSSProp list -> ReactElement)
   | WithAttribute   of IHTMLProp*ViewTree
   | WithClass       of string*ViewTree
@@ -90,21 +85,6 @@ type ViewTree =
     | Empty       , _           -> r
     | _           , Empty       -> l
     | _           , _           -> Fork (l, r)
-  static member Flatten vt : ReactElement array =
-    let ra = ResizeArray<_> 16
-    let rec loop aa cc ss vt =
-      match vt with
-      | ViewTree.Empty                  -> ()
-      | ViewTree.Element        e       -> ra.Add e
-      | ViewTree.DelayedElement d       -> ra.Add (d aa cc ss)
-      | ViewTree.WithAttribute  (a, t)  -> loop (a::aa) cc ss t
-      | ViewTree.WithClass      (c, t)  -> loop aa (c + " " + cc) ss t
-      | ViewTree.WithStyle      (s, t)  -> loop aa cc (s::ss) t
-      | ViewTree.Fork           (l, r)  ->
-        loop aa cc ss l
-        loop aa cc ss r
-    loop [] "" [] vt
-    ra.ToArray ()
 
 /// Dispatcher is a callback used by the view to indicate a model change.
 type Dispatcher =
@@ -134,14 +114,15 @@ module Details =
 
   let inline isGood ft            = FailureTree.IsGood ft
 
+  let rec pathStringLoop (sb : StringBuilder) ps =
+    let inline app s = sb.Append (s : string) |> ignore
+    match ps with
+    | []                                -> ()
+    | (FormletPathElement.Named n)::ps  -> pathStringLoop sb ps; app "."; app n
+
   let pathToString ps =
     let sb = StringBuilder 16
-    let inline app s = sb.Append (s : string) |> ignore
-    let rec loop ps =
-      match ps with
-      | []                                -> ()
-      | (FormletPathElement.Named n)::ps  -> loop ps; app "."; app n
-    loop ps
+    pathStringLoop sb ps
     sb.ToString ()
   let inline update d v           = Dispatcher.Update d v
   let inline left   d             = Dispatcher.Left d
@@ -164,6 +145,39 @@ module Details =
       let aa = (Class cc :> IHTMLProp)::(Style ss :> IHTMLProp)::aa
       e aa
 
+  module Loops =
+    module Form =
+      let rec update msg m =
+        match msg, m with
+        | ModelUpdate.Update v  , _                 -> Model.Value v
+        | ModelUpdate.Left   u  , Model.Fork (l, r) -> Model.Fork (update u l, r)
+        | ModelUpdate.Right  u  , Model.Fork (l, r) -> Model.Fork (l, update u r)
+        // mu is either left or right, create a new fork and update it
+        | _                 , _                     -> update msg (Model.Fork (zero (), zero ()))
+
+    module FailureTree =
+      let rec flatten (ra : ResizeArray<_>) suppress ft =
+        match ft with
+        | FailureTree.Empty       -> ()
+        | FailureTree.Leaf (p, m) -> ra.Add (suppress, p, m)
+        | FailureTree.Suppress ft -> flatten ra true ft
+        | FailureTree.Fork (l, r) ->
+          flatten ra suppress l
+          flatten ra suppress r
+
+    module ViewTree =
+      let rec flatten (ra : ResizeArray<_>) aa cc ss vt =
+        match vt with
+        | ViewTree.Empty                  -> ()
+        | ViewTree.Element        e       -> ra.Add e
+        | ViewTree.DelayedElement d       -> ra.Add (d aa cc ss)
+        | ViewTree.WithAttribute  (a, t)  -> flatten ra (a::aa) cc ss t
+        | ViewTree.WithClass      (c, t)  -> flatten ra aa (c + " " + cc) ss t
+        | ViewTree.WithStyle      (s, t)  -> flatten ra aa cc (s::ss) t
+        | ViewTree.Fork           (l, r)  ->
+          flatten ra aa cc ss l
+          flatten ra aa cc ss r
+
   module Combinations =
     let apply     f s = f s
     let andAlso   f s = f, s
@@ -171,21 +185,25 @@ module Details =
     let keepRight _ s = s
 open Details
 
+type FailureTree with
+  static member Flatten ft  : (bool*FormletPath*string) array =
+    let ra = ResizeArray<_> 16
+    Loops.FailureTree.flatten ra false ft
+    ra.ToArray ()
+
+type ViewTree with
+  static member Flatten vt : ReactElement array =
+    let ra = ResizeArray<_> 16
+    Loops.ViewTree.flatten ra [] "" [] vt
+    ra.ToArray ()
+
 /// Form exposes view/update to be used in with Fable.Elmish MVU
 module Form =
   let initial : Model = zero ()
 
   let view (F f) m d : ReactElement = f m d
 
-  let update msg m : Model =
-    let rec loop msg m =
-      match msg, m with
-      | ModelUpdate.Update v  , _                 -> Model.Value v
-      | ModelUpdate.Left   u  , Model.Fork (l, r) -> Model.Fork (loop u l, r)
-      | ModelUpdate.Right  u  , Model.Fork (l, r) -> Model.Fork (l, loop u r)
-      // mu is either left or right, create a new fork and update it
-      | _                 , _                     -> loop msg (Model.Fork (zero (), zero ()))
-    loop msg m
+  let update msg m : Model = Loops.Form.update msg m
 
 /// Formlets are composable form elements allowing reactive forms to be created
 ///   from basic primitives.
