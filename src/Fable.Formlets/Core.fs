@@ -1,3 +1,19 @@
+﻿// ----------------------------------------------------------------------------------------------
+// Copyright 2018 Mårten Rånge
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// ----------------------------------------------------------------------------------------------
+
 /// Formlets are composable form elements allowing reactive forms to be created
 ///   from basic primitives.
 module Fable.Formlets.Core
@@ -91,7 +107,7 @@ type IdGenerator =
 
   static member Next (G g) : string = g ()
 
-  static member New initial = 
+  static member New initial =
     let mutable i = initial
     G (fun () -> i <- i + 1; sprintf "id-%d" i)
 
@@ -360,7 +376,7 @@ module Validate =
       tv, tvt, tft
 
   /// Formlet fails to validate if empty string
-  let notEmpty t : Formlet<string> = 
+  let notEmpty t : Formlet<string> =
     test (fun v -> String.length v > 0) "You must provide a value." t
 
   /// Formlet fails to validate with msg if string don't match regex r
