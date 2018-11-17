@@ -114,6 +114,8 @@ module Details =
 
   let inline isGood ft            = FailureTree.IsGood ft
 
+  let inline clamp v f t          = if v < f then v elif t < v then t else v
+
   let rec pathStringLoop (sb : StringBuilder) ps =
     let inline app s = sb.Append (s : string) |> ignore
     match ps with
@@ -215,6 +217,8 @@ module Formlet =
     Ft <| fun fp m d ->
       v, zero (), zero ()
 
+  let inline lift v = value v
+
   /// Monadic bind for Formlets, usually you should try to use
   ///   apply over bind as it is allows for better caching of resources.
   let bind t uf : Formlet<_> =
@@ -231,6 +235,9 @@ module Formlet =
       let uv, uvt, uft  = invoke u fp um (right d)
 
       uv, join tvt uvt, join tft uft
+
+  let unlift t : Formlet<_> =
+    bind t id
 
   // Combines the result of two formlets using a combination function
   let combine f t u : Formlet<_> =

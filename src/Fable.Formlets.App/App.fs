@@ -13,6 +13,25 @@ open System.Text.RegularExpressions
 // The sample formlet collects data for a Customer and upon commit produces a
 //   Customer value
 
+type Individual =
+  {
+    FirstName : string
+    LastName  : string
+    SocialNo  : string
+  }
+  static member New fn ln sno : Individual = { FirstName = fn; LastName = ln; SocialNo = sno }
+
+type Company =
+  {
+    Name      : string
+    CompanyNo : string
+  }
+  static member New n cno : Company = { Name = n; CompanyNo = cno }
+
+type Entity =
+  | Individual  of Individual
+  | Company     of Company
+
 // Basic Address model
 type Address =
   {
@@ -39,20 +58,16 @@ type Address =
       Country   = country
     }
 
-// Basic Customer model with optional delivery address
-type Customer =
+// Basic NewCustomer model with optional delivery address
+type NewCustomer =
   {
-    FirstName       : string
-    LastName        : string
-    SocialNo        : string
+    Entity          : Entity
     InvoiceAddress  : Address
     DeliveryAddress : Address option
   }
-  static member New fn ln sno ia da =
+  static member New e ia da =
     {
-      FirstName       = fn
-      LastName        = ln
-      SocialNo        = sno
+      Entity          = e
       InvoiceAddress  = ia
       DeliveryAddress = da
     }
@@ -82,6 +97,33 @@ let sampleForm =
     |> Bootstrap.withValidationFeedback
     |> Bootstrap.withFormGroup
 
+  let regexSocialNo = Regex "^\d{6}-\d{5}$"
+
+  let validateSocialNo = Validate.regex regexSocialNo "You must provide a valid Social No (DDMMYY-CCCCC)."
+
+  let individual =
+    Formlet.value Individual.New
+    <*> input "First name" "Enter first name" Validate.notEmpty
+    <*> input "Last name"  "Enter last name"  Validate.notEmpty
+    <*> input "Social no"  "Enter social no"  (Validate.notEmpty >> validateSocialNo)
+    |> Bootstrap.withCard "Individual"
+    |> Formlet.withAttribute (Id "Individual")
+    |>> Individual
+
+  let company =
+    Formlet.value Company.New
+    <*> input "Name"        "Enter company name"  Validate.notEmpty
+    <*> input "Company no"  "Enter company no"    Validate.notEmpty
+    |> Bootstrap.withCard "Company"
+    |> Formlet.withAttribute (Id "Company")
+    |>> Company
+
+  let entity =
+    Bootstrap.select 0 [|"Individual", individual; "Company", company|] 
+    |> Bootstrap.withLabel "select-entity" "Individual or Company?"
+    |> Bootstrap.withFormGroup
+    |> Formlet.unlift
+
   // The address formlet
   //  Uses Applicative Functor apply to apply the collected
   //  values to Address.New
@@ -98,25 +140,18 @@ let sampleForm =
     <*> input "Country"     ""  Validate.notEmpty
     |> Bootstrap.withCard lbl
 
-  let regexSocialNo = Regex "^\d{6}-\d{5}$"
-
-  let validateSocialNo = Validate.regex regexSocialNo "You must provide a valid Social No (DDMMYY-CCCCC)."
-
   // The customer formlet
   //  Uses Applicative Functor apply to apply the collected
   //  values to Customer.New
-  let customer =
-    Formlet.value Customer.New
-    <*> input "First name" "Enter first name" Validate.notEmpty
-    <*> input "Last name"  "Enter last name"  Validate.notEmpty
-    <*> input "Social no"  "Enter social no"  (Validate.notEmpty >> validateSocialNo)
-    |> Bootstrap.withCard "Customer"
+  let newCustomer =
+    Formlet.value NewCustomer.New
+    <*> entity
     <*> address "Invoice address"
     // Note the user of withOption to create an optional delivery address input
     <*> (address "Delivery address" |> Bootstrap.withOption "delivery-address?" "Use delivery address?")
 
   // Make it into a form
-  customer |> Bootstrap.asForm extractModel onUpdate onCommit onCancel onReset
+  newCustomer |> Bootstrap.asForm extractModel onUpdate onCommit onCancel onReset
 
 let init () = M Model.Empty
 

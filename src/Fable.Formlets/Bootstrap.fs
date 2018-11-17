@@ -64,8 +64,8 @@ let checkBox id lbl : Formlet<bool> =
           input
             [|
               Checked   isChecked
-              Class     "form-check-input"
               Id        id
+              Class     "form-check-input"
               Type      "checkbox"
               OnChange  <| fun v -> update d (if isChecked then "" else "on")
             |]
@@ -74,6 +74,38 @@ let checkBox id lbl : Formlet<bool> =
     let tvt       = delayedElement d [] "form-check" []
 
     isChecked, tvt, zero ()
+
+/// Primitive select input formlet
+let select initial (options : (string*'T) array) : Formlet<'T> =
+  if options.Length = 0 then failwithf "select requires 1 or more options"
+
+  let options_ = 
+    options
+    |> Array.mapi (fun i (v, _) -> option [|Value (string i)|] [|str v|])
+
+  Ft <| fun fp m d ->
+    let i =
+      match m with
+      | Model.Value v -> 
+        let b, i  = System.Int32.TryParse v
+        if b then i else 0
+      | _             -> initial 
+
+    let i = clamp i 0 (options.Length - 1)
+
+    let aa : IHTMLProp list =
+        [
+          OnChange  <| fun v -> update d v.Value
+          Value     (string i)
+        ]
+
+    let d     =
+      flip select options_
+    let tvt   = delayedElement d aa "form-control" []
+
+    let v = options.[i]
+
+    snd v, tvt, zero ()
 
 /// Adds a label to a Formlet
 ///   Requires an id to associate the label with the visual element
