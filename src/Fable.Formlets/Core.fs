@@ -331,26 +331,22 @@ module Validate =
   /// Always succeeds
   let yes t : Formlet<_> = t
 
-  /// Formlet fails to validate if empty string
-  let notEmpty t : Formlet<string> =
+  /// Formlet fails to validate with msg if v return false
+  let test (v : 'T -> bool) (msg : string) t : Formlet<_> =
     let t = adapt t
     Ft <| fun fp m d ->
       let tv, tvt, tft  = invoke t fp m d
-      let valid         = String.length tv > 0
-      let tft           = if valid then tft else join tft (FailureTree.Leaf (fp, "You must provide a value."))
-      let tvt           = ViewTree.WithAttribute (Required true, tvt)
-      let tvt           = ViewTree.WithClass ((if valid then "is-valid" else "is-invalid"), tvt)
-
-      tv, tvt, tft
-
-  /// Formlet fails to validate with msg if string don't match regex r
-  let regex (r : Regex) (msg : string) t : Formlet<string> =
-    let t = adapt t
-    Ft <| fun fp m d ->
-      let tv, tvt, tft  = invoke t fp m d
-      let valid         = r.IsMatch tv
+      let valid         = v tv
       let tft           = if valid then tft else join tft (FailureTree.Leaf (fp, msg))
       let tvt           = ViewTree.WithAttribute (Required true, tvt)
       let tvt           = ViewTree.WithClass ((if valid then "is-valid" else "is-invalid"), tvt)
 
       tv, tvt, tft
+
+  /// Formlet fails to validate if empty string
+  let notEmpty t : Formlet<string> = 
+    test (fun v -> String.length v > 0) "You must provide a value." t
+
+  /// Formlet fails to validate with msg if string don't match regex r
+  let regex (r : Regex) (msg : string) t : Formlet<string> =
+    test r.IsMatch msg t
