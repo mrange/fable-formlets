@@ -17,7 +17,7 @@ let f = text "Enter your name" ""
 We can add a label to it:
 
 ```fsharp
-let f = text "Enter your name" "" |> withLabel "name-id" "Name"
+let f = text "Enter your name" "" |> withLabel "Name"
 ```
 
 ![A single labeled input formlet](images/example-0002.PNG)
@@ -28,7 +28,7 @@ We can create our input formlet with formlet by creating a function
 let input lbl hint validation =
   text hint ""                // Text input
   |> validation               // Apply validation
-  |> withLabel lbl lbl        // label the text input
+  |> withLabel lbl            // label the text input
   |> withValidationFeedback   // Display validation failures
   |> withFormGroup            // Wrap it in a form-group (Bootstrap)
 ```
@@ -78,10 +78,10 @@ Currently `fable-formlets` is merely a functionally demo and not a serious libra
 The core type is `Formlet<_>`
 
 ```fsharp
-type Formlet<'T> = Ft of (FormletPath -> Model -> Dispatcher -> 'T*ViewTree*FailureTree)
+type Formlet<'T> = Ft of (IdGenerator -> FormletPath -> Model -> Dispatcher -> 'T*ViewTree*FailureTree)
 ```
 
-That is; a formlet is function that given a path that indicates where we are in the model, the current model element and a dispatcher (that allows the view element dispatch a message to update the model). This function produces a value 'T, a view tree and a failure tree.
+That is; a formlet is function that given a id generator, a path that indicates where we are in the model, the current model element and a dispatcher (that allows the view element dispatch a message to update the model). This function produces a value 'T, a view tree and a failure tree.
 
 A formlet always produces a value in order to make `bind` not shortcut the rest of the formlet. The value is valid if the `FailureTree.IsGood x` is `true`.
 
@@ -121,7 +121,7 @@ For example this is how the text input is defined:
 
 ```fsharp
 let text hint initial : Formlet<string> =
-  Ft <| fun fp m d ->
+  Ft <| fun ig fp m d ->
     let v =
       // Model needs to be deconstructed. If the model isn't a value
       //  the model is being initially constructed or has changed shape
@@ -154,20 +154,20 @@ let text hint initial : Formlet<string> =
 Let's also look at how a label is constructed
 
 ```fsharp
-let withLabel id lbl t : Formlet<_> =
+let withLabel lbl t : Formlet<_> =
   let t = adapt t
-  Ft <| fun fp m d ->
+  Ft <| fun ig fp m d ->
+    //  id is the identifier we given to tie the label and the labeled element
+    //  together
+    let id            = IdGenerator.Next ig
     // Update the formlet path with label, this will allow validation
     //  formlets append the correct context
     let fp            = (FormletPathElement.Named lbl)::fp
     // Invoke the labeled formlet
-    let tv, tvt, tft  = invoke t fp m d
+    let tv, tvt, tft  = invoke t ig fp m d
     // Create the label element, this time we don't use delayed elements
     //  as we don't want parent formlets to modify the style of the label,
     //  rather the style of the labeled element
-    //  id is the identifier we given to tie the label and the labeled element
-    //  together, future updates could allow an id generator to be passed to the
-    //  allowing formlet implicit ids
     let e             = label [|HTMLAttr.HtmlFor id|] [|str lbl|]
     // We add the `Id` attribute to the labeled element
     let tvt           = ViewTree.WithAttribute (Id id, tvt)

@@ -13,9 +13,9 @@ open System.Text
 ///   The label is added to the formlet path
 let withCard lbl t : Formlet<_> =
   let t = adapt t
-  Ft <| fun fp m d ->
+  Ft <| fun ig fp m d ->
     let fp            = (FormletPathElement.Named lbl)::fp
-    let tv, tvt, tft  = invoke t fp m d
+    let tv, tvt, tft  = invoke t ig fp m d
     let tes           = flatten tvt
     let d             =
       flip div
@@ -29,7 +29,7 @@ let withCard lbl t : Formlet<_> =
 
 /// Primitive text input formlet
 let text hint initial : Formlet<string> =
-  Ft <| fun fp m d ->
+  Ft <| fun ig fp m d ->
     let v =
       match m with
       | Model.Value v -> v
@@ -52,8 +52,9 @@ let text hint initial : Formlet<string> =
 
 /// Primitive labeled checkbox input formlet
 ///   Requires an id to associate the label with the checkbox
-let checkBox id lbl : Formlet<bool> =
-  Ft <| fun fp m d ->
+let checkBox lbl : Formlet<bool> =
+  Ft <| fun ig fp m d ->
+    let id        = IdGenerator.Next ig
     let isChecked =
       match m with
       | Model.Value "on"  -> true
@@ -83,7 +84,7 @@ let select initial (options : (string*'T) array) : Formlet<'T> =
     options
     |> Array.mapi (fun i (v, _) -> option [|Value (string i)|] [|str v|])
 
-  Ft <| fun fp m d ->
+  Ft <| fun ig fp m d ->
     let i =
       match m with
       | Model.Value v -> 
@@ -109,11 +110,12 @@ let select initial (options : (string*'T) array) : Formlet<'T> =
 
 /// Adds a label to a Formlet
 ///   Requires an id to associate the label with the visual element
-let withLabel id lbl t : Formlet<_> =
+let withLabel lbl t : Formlet<_> =
   let t = adapt t
-  Ft <| fun fp m d ->
+  Ft <| fun ig fp m d ->
+    let id            = IdGenerator.Next ig
     let fp            = (FormletPathElement.Named lbl)::fp
-    let tv, tvt, tft  = invoke t fp m d
+    let tv, tvt, tft  = invoke t ig fp m d
     let e             = label [|HTMLAttr.HtmlFor id|] [|str lbl|]
     let tvt           = ViewTree.WithAttribute (Id id, tvt)
     let tvt           = join (ViewTree.Element e) tvt
@@ -123,8 +125,8 @@ let withLabel id lbl t : Formlet<_> =
 /// Adds a validation feedback to a Formlet
 let withValidationFeedback t : Formlet<_> =
   let t = adapt t
-  Ft <| fun fp m d ->
-    let tv, tvt, tft  = invoke t fp m d
+  Ft <| fun ig fp m d ->
+    let tv, tvt, tft  = invoke t ig fp m d
     if isGood tft then
       tv, tvt, tft
     else
@@ -144,8 +146,8 @@ let withValidationFeedback t : Formlet<_> =
 /// Makes a Formlet optional by displaying a check box that when ticked
 ///   shows the visual element for t.
 ///   Requires an id to associate the label with the visual element
-let withOption id lbl t : Formlet<_ option> =
-  checkBox id lbl >>= (fun v -> if v then Formlet.map t Some else Formlet.value None)
+let withOption lbl t : Formlet<_ option> =
+  checkBox lbl >>= (fun v -> if v then Formlet.map t Some else Formlet.value None)
 
 /// Wraps the Formlet in a div with class "form-group"
 let withFormGroup t = Formlet.withContainer div t |> Formlet.withClass "form-group"
@@ -159,7 +161,8 @@ let withFormGroup t = Formlet.withContainer div t |> Formlet.withClass "form-gro
 let asForm extractModel onUpdate onCommit onCancel onReset (t : Formlet<'T>) : Form<'Model, 'Msg> =
   let t = adapt t
   F <| fun m d ->
-    let tv, tvt, tft  = invoke t [] (extractModel m) (Dispatcher.D <| fun mu -> onUpdate d mu)
+    let ig            = IdGenerator.New 1000
+    let tv, tvt, tft  = invoke t ig [] (extractModel m) (Dispatcher.D <| fun mu -> onUpdate d mu)
 
     let tes           = flatten tvt
     let tfs           = flatten tft

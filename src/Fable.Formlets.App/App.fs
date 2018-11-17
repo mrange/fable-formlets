@@ -93,7 +93,7 @@ let sampleForm =
   let input lbl hint v =
     Bootstrap.text hint ""
     |> v
-    |> Bootstrap.withLabel lbl lbl
+    |> Bootstrap.withLabel lbl
     |> Bootstrap.withValidationFeedback
     |> Bootstrap.withFormGroup
 
@@ -107,7 +107,6 @@ let sampleForm =
     <*> input "Last name"  "Enter last name"  Validate.notEmpty
     <*> input "Social no"  "Enter social no"  (Validate.notEmpty >> validateSocialNo)
     |> Bootstrap.withCard "Individual"
-    |> Formlet.withAttribute (Id "Individual")
     |>> Individual
 
   let company =
@@ -115,12 +114,11 @@ let sampleForm =
     <*> input "Name"        "Enter company name"  Validate.notEmpty
     <*> input "Company no"  "Enter company no"    Validate.notEmpty
     |> Bootstrap.withCard "Company"
-    |> Formlet.withAttribute (Id "Company")
     |>> Company
 
   let entity =
     Bootstrap.select 0 [|"Individual", individual; "Company", company|] 
-    |> Bootstrap.withLabel "select-entity" "Individual or Company?"
+    |> Bootstrap.withLabel "Individual or Company?"
     |> Bootstrap.withFormGroup
     |> Formlet.unlift
 
@@ -148,7 +146,7 @@ let sampleForm =
     <*> entity
     <*> address "Invoice address"
     // Note the user of withOption to create an optional delivery address input
-    <*> (address "Delivery address" |> Bootstrap.withOption "delivery-address?" "Use delivery address?")
+    <*> (address "Delivery address" |> Bootstrap.withOption "Use delivery address?")
 
   // Make it into a form
   newCustomer |> Bootstrap.asForm extractModel onUpdate onCommit onCancel onReset

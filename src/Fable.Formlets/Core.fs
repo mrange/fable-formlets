@@ -86,6 +86,15 @@ type ViewTree =
     | _           , Empty       -> l
     | _           , _           -> Fork (l, r)
 
+type IdGenerator =
+  | G of (unit -> string)
+
+  static member Next (G g) : string = g ()
+
+  static member New initial = 
+    let mutable i = initial
+    G (fun () -> i <- i + 1; sprintf "id-%d" i)
+
 /// Dispatcher is a callback used by the view to indicate a model change.
 type Dispatcher =
   | D of (ModelUpdate -> unit)
@@ -96,7 +105,7 @@ type Dispatcher =
 
 /// Formlet is a function that given a path to the current model element, a model element
 ///   and dispatcher function generates a value 'T, the view tree and the failure tree.
-type Formlet<'T> = Ft of (FormletPath -> Model -> Dispatcher -> 'T*ViewTree*FailureTree)
+type Formlet<'T> = Ft of (IdGenerator -> FormletPath -> Model -> Dispatcher -> 'T*ViewTree*FailureTree)
 
 /// Form is a function that given a Model and a Dispatcher function creates a ReactElement.
 ///   The formlet isn't directly usable in a Fable.Elmish view, instead the Formlet is wrapped
@@ -108,7 +117,7 @@ module Details =
   //let inline adapt  (Ft f)        = OptimizedClosures.FSharpFunc<_, _, _, _, _>.Adapt f
   //let inline invoke f fp ps m d   = (f : OptimizedClosures.FSharpFunc<_, _, _, _, _>).Invoke (fp, ps, m, d)
   let inline adapt  (Ft f)        = f
-  let inline invoke f fp m d      = f fp m d
+  let inline invoke f ig fp m d   = f ig fp m d
 
   let inline flip f a b           = f b a
 
@@ -214,7 +223,7 @@ module Formlet =
 
   /// A Formlet that always produces value and no visual element
   let value v : Formlet<_> =
-    Ft <| fun fp m d ->
+    Ft <| fun ig fp m d ->
       v, zero (), zero ()
 
   let inline lift v = value v
@@ -223,16 +232,16 @@ module Formlet =
   ///   apply over bind as it is allows for better caching of resources.
   let bind t uf : Formlet<_> =
     let t = adapt t
-    Ft <| fun fp m d ->
+    Ft <| fun ig fp m d ->
       let tm, um =
         match m with
         | Model.Fork (l, r) -> l, r
         | _                 -> zero (), zero ()
 
-      let tv, tvt, tft  = invoke t fp tm (left d)
+      let tv, tvt, tft  = invoke t ig fp tm (left d)
       let u             = uf tv
       let u             = adapt u
-      let uv, uvt, uft  = invoke u fp um (right d)
+      let uv, uvt, uft  = invoke u ig fp um (right d)
 
       uv, join tvt uvt, join tft uft
 
@@ -243,14 +252,14 @@ module Formlet =
   let combine f t u : Formlet<_> =
     let t = adapt t
     let u = adapt u
-    Ft <| fun fp m d ->
+    Ft <| fun ig fp m d ->
       let tm, um =
         match m with
         | Model.Fork (l, r) -> l, r
         | _                 -> zero (), zero ()
 
-      let tv, tvt, tft  = invoke t fp tm (left d)
-      let uv, uvt, uft  = invoke u fp um (right d)
+      let tv, tvt, tft  = invoke t ig fp tm (left d)
+      let uv, uvt, uft  = invoke u ig fp um (right d)
 
       (f tv uv), join tvt uvt, join tft uft
 
@@ -266,8 +275,8 @@ module Formlet =
   /// Functor map
   let map t f : Formlet<_> =
     let t = adapt t
-    Ft <| fun fp m d ->
-      let tv, tvt, tft  = invoke t fp m d
+    Ft <| fun ig fp m d ->
+      let tv, tvt, tft  = invoke t ig fp m d
 
       f tv, tvt, tft
 
@@ -276,8 +285,8 @@ module Formlet =
   ///  allow aggregating of them
   let withAttribute p t : Formlet<_> =
     let t = adapt t
-    Ft <| fun fp m d ->
-      let tv, tvt, tft  = invoke t fp m d
+    Ft <| fun ig fp m d ->
+      let tv, tvt, tft  = invoke t ig fp m d
       let tvt           = ViewTree.WithAttribute (p, tvt)
 
       tv, tvt, tft
@@ -285,8 +294,8 @@ module Formlet =
   /// Appends a class to visual element of t
   let withClass c t : Formlet<_> =
     let t = adapt t
-    Ft <| fun fp m d ->
-      let tv, tvt, tft  = invoke t fp m d
+    Ft <| fun ig fp m d ->
+      let tv, tvt, tft  = invoke t ig fp m d
       let tvt           = ViewTree.WithClass (c, tvt)
 
       tv, tvt, tft
@@ -294,8 +303,8 @@ module Formlet =
   /// Appends a style to visual element of t
   let withStyle s t : Formlet<_> =
     let t = adapt t
-    Ft <| fun fp m d ->
-      let tv, tvt, tft  = invoke t fp m d
+    Ft <| fun ig fp m d ->
+      let tv, tvt, tft  = invoke t ig fp m d
       let tvt           = ViewTree.WithStyle (s, tvt)
 
       tv, tvt, tft
@@ -303,8 +312,8 @@ module Formlet =
   /// Wraps the visual element of t inside a container (like div)
   let withContainer c t : Formlet<_> =
     let t = adapt t
-    Ft <| fun fp m d ->
-      let tv, tvt, tft  = invoke t fp m d
+    Ft <| fun ig fp m d ->
+      let tv, tvt, tft  = invoke t ig fp m d
       let tes           = flatten tvt
       let d             = (flip c) tes
       let tvt           = delayedElement_ d
@@ -341,8 +350,8 @@ module Validate =
   /// Formlet fails to validate with msg if v return false
   let test (v : 'T -> bool) (msg : string) t : Formlet<_> =
     let t = adapt t
-    Ft <| fun fp m d ->
-      let tv, tvt, tft  = invoke t fp m d
+    Ft <| fun ig fp m d ->
+      let tv, tvt, tft  = invoke t ig fp m d
       let valid         = v tv
       let tft           = if valid then tft else join tft (FailureTree.Leaf (fp, msg))
       let tvt           = ViewTree.WithAttribute (Required true, tvt)
