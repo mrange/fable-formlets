@@ -1,4 +1,4 @@
-# Why and what is formlets?
+# Why and what are formlets?
 
 A few years ago I was trying out [WebSharper](http://websharper.com/). There was much I didn't understand about WebSharper but I fell in love with the concept of Formlets/Piglets. For years I have been trying to make others see it as I do; an awesome and productive way to build reactive Forms that have validation.
 

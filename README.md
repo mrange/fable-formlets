@@ -5,7 +5,7 @@ Fable Formlets (Applicative Functor Forms kind of)
 
 ## Why formlets
 
-Please see: [Why and what is formlets?](WHY.md)
+Please see: [Why and what are formlets?](WHY.md)
 
 ## Requirements
 
