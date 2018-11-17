@@ -23,3 +23,10 @@ Please see: [Why and what is formlets?](WHY.md)
 
 Any modification you do to the F# code will be reflected in the web page after saving.
 
+## TODO
+
+1. Fix Reset form functionality
+2. Fix select switch functionality.
+3. Add test coverage
+
+1 and 2 are related in that we like to rebuild a visual tree from scratch. There is likely some functionality in Fable.Elmish to allow it.
