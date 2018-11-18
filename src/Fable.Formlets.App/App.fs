@@ -16,8 +16,10 @@
 
 module App
 
-open Elmish
-open Elmish.React
+open Fable.Import
+open Fable.Import.Browser
+open Fable.Import.React
+
 open Fable.Helpers.React
 open Fable.Helpers.React.Props
 
@@ -95,16 +97,7 @@ type MyMessage  =
   | Reset
   | UpdateForm of ModelUpdate
 
-let sampleForm =
-  // Callbacks required to map the Formlet model to the MVU model
-  let extractModel  (M m) = m
-  let onUpdate d    mu    = d (UpdateForm mu)
-  let onCommit d     v    =
-    printfn "Commit: %A" v
-    d Commit
-  let onCancel d          = d Cancel
-  let onReset  d          = d Reset
-
+let sampleFormlet =
   // A labeled textual input with validation and validation feedback
   let input lbl hint v =
     Formlet.text hint ""
@@ -157,42 +150,109 @@ let sampleForm =
   // The customer formlet
   //  Uses Applicative Functor apply to apply the collected
   //  values to Customer.New
-  let newCustomer =
-    Formlet.value NewCustomer.New
-    <*> entity
-    <*> address "Invoice address"
-    // Note the user of withOption to create an optional delivery address input
-    <*> (address "Delivery address" |> Formlet.withOption "Use delivery address?")
+  Formlet.value NewCustomer.New
+  <*> entity
+  <*> address "Invoice address"
+  // Note the user of withOption to create an optional delivery address input
+  <*> (address "Delivery address" |> Formlet.withOption "Use delivery address?")
 
-  // Make it into a form
-  newCustomer |> Formlet.asForm extractModel onUpdate onCommit onCancel onReset
+type FormletProps<'T> = 
+  { 
+    Formlet   : Formlet<'T>
+    OnCommit  : 'T -> unit
+    OnCancel  : unit -> unit
+  }
 
-let init () = M Model.Empty
+type FormletState = 
+  { 
+    Model : Model
+  }
+  static member Zero : FormletState = { Model = Model.Empty }
 
-// Handles view messages
-let update msg (M model) =
-  match msg with
-  | Commit        -> M model
-  | Cancel        -> M model
-  | Reset         -> init ()
-  | UpdateForm mu ->
-    // Updates the embedded Formlet model
-    // Prints to console for debugging
-    let before = model
-    printfn "Update - msg   : %A" msg
-    printfn "Update - before: %A" before
-    let after  = Form.update mu model
-    printfn "Update - after : %A" after
-    M after
+open Details
 
-// The view
-let view model dispatch =
-  div
-    [|Style [CSSProp.Margin "12px"]|]
-    [|Form.view sampleForm model dispatch|]
+type FormletComponent<'T>(initialProps : FormletProps<'T>) =
+  inherit Component<FormletProps<'T>, FormletState>(initialProps)
+  do
+    base.setInitState FormletState.Zero
 
-// App
-Program.mkSimple init update view
-|> Program.withReact "elmish-app"
-|> Program.withConsoleTrace
-|> Program.run
+  member x.updateModel mu =
+    printfn "updateModel"
+    printfn "ModelUpdate  : %A" mu
+    printfn "BeforeUpdate : %A" x.state.Model
+    let m = Formlet.update mu x.state.Model
+    printfn "AfterUpdate  : %A" m
+    x.setState { Model = m }
+    ()
+
+  member x.commit tv =
+    printfn "commit: %A" tv
+    x.props.OnCommit tv
+    ()
+
+  member x.cancel () =
+    printfn "cancel"
+    x.props.OnCancel ()
+    ()
+
+  member x.reset () =
+    printfn "reset"
+    x.setState { Model = Model.Empty }
+    ()
+
+  override x.render() =
+    printfn "render: %A" x.state.Model 
+    let t             = x.props.Formlet
+    let t             = adapt t
+    let ig            = IdGenerator.New 1000
+    let tv, tvt, tft  = invoke t ig [] x.state.Model (Dispatcher.D x.updateModel)
+
+    let tes           = flatten tvt
+    let tfs           = flatten tft
+    let valid         = isGood tft
+    let onCommit _    = if valid then x.commit tv else ()
+    let onCancel _    = x.cancel ()
+    let onReset  _    = x.reset ()
+    let lis           =
+      tfs
+      |> Array.map (fun (s, p, m) ->
+        let p   = pathToString p
+        let cls = if s then "list-group-item list-group-item-warning" else "list-group-item list-group-item-danger"
+        li [|Class cls|] [|str (sprintf "§ %s - %s" p m)|])
+    let ul            = ul [|Class "list-group"; Style [CSSProp.MarginBottom "12px"]|] lis
+    let be            =
+      let inline btn action cls lbl dis =
+        button
+          [|
+            Class   cls
+            Disabled dis
+            OnClick action
+            Style   [CSSProp.MarginRight "8px"]
+            Type    "button"
+          |]
+          [|str lbl|]
+      div
+        [|Style [CSSProp.MarginBottom "12px"; CSSProp.MarginTop "12px"]|]
+        [|
+          btn onCommit  "btn btn-primary" "Commit" (not valid)
+          btn onCancel  "btn"             "Cancel" false
+          btn onReset   "btn"             "Reset"  false
+        |]
+
+    form
+      [|Style [CSSProp.Margin "12px"]|]
+      [|
+        be
+        ul
+        (if tes.Length > 0 then div [||] tes else tes.[0])
+        be
+      |]
+
+let inline formletComponent formlet onCommit onCancel = 
+  ofType<FormletComponent<_>,_,_> { Formlet = formlet; OnCommit = onCommit; OnCancel = onCancel } []
+
+let onCommit tv = printfn "Success: %A" tv
+let onCancel () = printfn "Cancelled"
+  
+let element = formletComponent sampleFormlet onCommit onCancel
+ReactDom.render(element, document.getElementById("elmish-app"))

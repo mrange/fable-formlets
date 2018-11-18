@@ -123,11 +123,6 @@ type Dispatcher =
 ///   and dispatcher function generates a value 'T, the view tree and the failure tree.
 type Formlet<'T> = Ft of (IdGenerator -> FormletPath -> Model -> Dispatcher -> 'T*ViewTree*FailureTree)
 
-/// Form is a function that given a Model and a Dispatcher function creates a ReactElement.
-///   The formlet isn't directly usable in a Fable.Elmish view, instead the Formlet is wrapped
-///   in a Form that fits the MVU model
-type Form<'Model, 'Msg> = F of ('Model -> ('Msg -> unit) -> ReactElement)
-
 module Details =
   // TODO: Why doesn't this work?
   //let inline adapt  (Ft f)        = OptimizedClosures.FSharpFunc<_, _, _, _, _>.Adapt f
@@ -224,17 +219,11 @@ type ViewTree with
     Loops.ViewTree.flatten ra [] "" [] vt
     ra.ToArray ()
 
-/// Form exposes view/update to be used in with Fable.Elmish MVU
-module Form =
-  let initial : Model = zero ()
-
-  let view (F f) m d : ReactElement = f m d
-
-  let update msg m : Model = Loops.Form.update msg m
-
 /// Formlets are composable form elements allowing reactive forms to be created
 ///   from basic primitives.
 module Formlet =
+  let update msg m : Model = Loops.Form.update msg m
+
   // TODO: do we benefit from inlining these functions?
 
   /// A Formlet that always produces value and no visual element
