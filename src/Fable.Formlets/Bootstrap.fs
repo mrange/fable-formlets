@@ -46,8 +46,7 @@ type FormletComponent<'T>(initialProps : FormletProps<'T>) =
     base.setInitState FormletState.Zero
 
   member x.updateModel mu : unit =
-    let m = Formlet.update mu x.state.Model
-    x.setState { Model = m }
+    x.setState (fun m _ -> { Model = Formlet.update m.Model mu })
 
   member x.commit tv : unit =
     x.props.OnCommit tv
@@ -56,8 +55,7 @@ type FormletComponent<'T>(initialProps : FormletProps<'T>) =
     x.props.OnCancel ()
 
   member x.reset () : unit =
-    x.setState { Model = Model.Empty }
-    ()
+    x.setState (fun m _ -> { Model = Model.Empty })
 
   override x.render() : ReactElement =
     let t             = x.props.Formlet

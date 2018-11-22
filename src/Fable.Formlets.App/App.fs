@@ -162,4 +162,4 @@ let input lbl hint validation =
   |> Formlet.withFormGroup            // Wrap it in a form-group (Bootstrap)
 
 let element = Formlet.mkForm sampleFormlet onCommit onCancel
-ReactDom.render(element, document.getElementById("elmish-app"))
+ReactDom.render(element, document.getElementById("react-app"))

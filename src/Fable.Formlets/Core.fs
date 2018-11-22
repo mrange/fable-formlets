@@ -222,7 +222,7 @@ type ViewTree with
 /// Formlets are composable form elements allowing reactive forms to be created
 ///   from basic primitives.
 module Formlet =
-  let inline update msg m : Model = Loops.Form.update msg m
+  let inline update m msg : Model = Loops.Form.update msg m
 
   // TODO: do we benefit from inlining these functions?
 

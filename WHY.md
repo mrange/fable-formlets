@@ -74,7 +74,7 @@ We render the formlet like a React component:
 // onCommit is called when user click onCommit with the value produced by the Formlet
 // onCancel is called when user click onCancel
 let element = Formlet.mkForm newUser onCommit onCancel
-ReactDom.render(element, document.getElementById("elmish-app"))
+ReactDom.render(element, document.getElementById("react-app"))
 ```
 
 `mkForm` adds Commit, Cancel and Reset buttons as well as showing the validations errors in a summary.
