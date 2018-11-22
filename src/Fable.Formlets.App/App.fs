@@ -16,11 +16,8 @@
 
 module App
 
-open Elmish
-open Elmish.React
-open Fable.Helpers.React
-open Fable.Helpers.React.Props
-
+open Fable.Import
+open Fable.Import.Browser
 open Fable.Formlets.Core
 open Fable.Formlets.Bootstrap
 
@@ -95,16 +92,7 @@ type MyMessage  =
   | Reset
   | UpdateForm of ModelUpdate
 
-let sampleForm =
-  // Callbacks required to map the Formlet model to the MVU model
-  let extractModel  (M m) = m
-  let onUpdate d    mu    = d (UpdateForm mu)
-  let onCommit d     v    =
-    printfn "Commit: %A" v
-    d Commit
-  let onCancel d          = d Cancel
-  let onReset  d          = d Reset
-
+let sampleFormlet =
   // A labeled textual input with validation and validation feedback
   let input lbl hint v =
     Formlet.text hint ""
@@ -157,42 +145,21 @@ let sampleForm =
   // The customer formlet
   //  Uses Applicative Functor apply to apply the collected
   //  values to Customer.New
-  let newCustomer =
-    Formlet.value NewCustomer.New
-    <*> entity
-    <*> address "Invoice address"
-    // Note the user of withOption to create an optional delivery address input
-    <*> (address "Delivery address" |> Formlet.withOption "Use delivery address?")
+  Formlet.value NewCustomer.New
+  <*> entity
+  <*> address "Invoice address"
+  // Note the user of withOption to create an optional delivery address input
+  <*> (address "Delivery address" |> Formlet.withOption "Use delivery address?")
 
-  // Make it into a form
-  newCustomer |> Formlet.asForm extractModel onUpdate onCommit onCancel onReset
+let onCommit tv = printfn "Success: %A" tv
+let onCancel () = printfn "Cancelled"
 
-let init () = M Model.Empty
+let input lbl hint validation =
+  Formlet.text hint ""                // Text input
+  |> validation               // Apply validation
+  |> Formlet.withLabel lbl            // label the text input
+  |> Formlet.withValidationFeedback   // Display validation failures
+  |> Formlet.withFormGroup            // Wrap it in a form-group (Bootstrap)
 
-// Handles view messages
-let update msg (M model) =
-  match msg with
-  | Commit        -> M model
-  | Cancel        -> M model
-  | Reset         -> init ()
-  | UpdateForm mu ->
-    // Updates the embedded Formlet model
-    // Prints to console for debugging
-    let before = model
-    printfn "Update - msg   : %A" msg
-    printfn "Update - before: %A" before
-    let after  = Form.update mu model
-    printfn "Update - after : %A" after
-    M after
-
-// The view
-let view model dispatch =
-  div
-    [|Style [CSSProp.Margin "12px"]|]
-    [|Form.view sampleForm model dispatch|]
-
-// App
-Program.mkSimple init update view
-|> Program.withReact "elmish-app"
-|> Program.withConsoleTrace
-|> Program.run
+let element = Formlet.mkForm sampleFormlet onCommit onCancel
+ReactDom.render(element, document.getElementById("react-app"))

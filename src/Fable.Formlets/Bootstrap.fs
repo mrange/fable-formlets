@@ -17,18 +17,98 @@
 /// Formlets based on the popular CSS library Bootstrap
 module Fable.Formlets.Bootstrap
 
+open Fable.Import.React
+
+open Fable.Helpers.React
+open Fable.Helpers.React.Props
+
+open Fable.Formlets.Core
+open Fable.Formlets.Core.Details
+
+open System.Text
+
+type FormletProps<'T> = 
+  { 
+    Formlet   : Formlet<'T>
+    OnCommit  : 'T -> unit
+    OnCancel  : unit -> unit
+  }
+
+type FormletState = 
+  { 
+    Model : Model
+  }
+  static member Zero : FormletState = { Model = Model.Empty }
+
+type FormletComponent<'T>(initialProps : FormletProps<'T>) =
+  inherit Component<FormletProps<'T>, FormletState>(initialProps)
+  do
+    base.setInitState FormletState.Zero
+
+  member x.updateModel mu : unit =
+    x.setState (fun m _ -> { Model = Formlet.update m.Model mu })
+
+  member x.commit tv : unit =
+    x.props.OnCommit tv
+
+  member x.cancel () : unit =
+    x.props.OnCancel ()
+
+  member x.reset () : unit =
+    x.setState (fun m _ -> { Model = Model.Empty })
+
+  override x.render() : ReactElement =
+    let t             = x.props.Formlet
+    let t             = adapt t
+    let ig            = IdGenerator.New 1000
+    let tv, tvt, tft  = invoke t ig [] x.state.Model (Dispatcher.D x.updateModel)
+
+    let tes           = flatten tvt
+    let tfs           = flatten tft
+    let valid         = isGood tft
+    let onCommit _    = if valid then x.commit tv else ()
+    let onCancel _    = x.cancel ()
+    let onReset  _    = x.reset ()
+    let lis           =
+      tfs
+      |> Array.map (fun (s, p, m) ->
+        let p   = pathToString p
+        let cls = if s then "list-group-item list-group-item-warning" else "list-group-item list-group-item-danger"
+        li [|Class cls|] [|str (sprintf "§ %s - %s" p m)|])
+    let ul            = ul [|Class "list-group"; Style [CSSProp.MarginBottom "12px"]|] lis
+    let be            =
+      let inline btn action cls lbl dis =
+        button
+          [|
+            Class   cls
+            Disabled dis
+            OnClick action
+            Style   [CSSProp.MarginRight "8px"]
+            Type    "button"
+          |]
+          [|str lbl|]
+      div
+        [|Style [CSSProp.MarginBottom "12px"; CSSProp.MarginTop "12px"]|]
+        [|
+          btn onCommit  "btn btn-primary" "Commit" (not valid)
+          btn onCancel  "btn"             "Cancel" false
+          btn onReset   "btn"             "Reset"  false
+        |]
+
+    form
+      [|Style [CSSProp.Margin "12px"]|]
+      [|
+        be
+        ul
+        (if tes.Length > 0 then div [||] tes else tes.[0])
+        be
+      |]
+
 module Formlet =
-  open Fable.Formlets.Core
-  open Fable.Formlets.Core.Details
-
-  open Fable.Helpers.React
-  open Fable.Helpers.React.Props
-
-  open System.Text
 
   /// Wraps the visual element of t inside a labeled card container
   ///   The label is added to the formlet path
-  let withCard lbl t : Formlet<_> =
+  let inline withCard lbl t : Formlet<_> =
     let t = adapt t
     Ft <| fun ig fp m d ->
       let fp            = (FormletPathElement.Named lbl)::fp
@@ -45,7 +125,7 @@ module Formlet =
       tv, tvt, tft
 
   /// Primitive text input formlet
-  let text hint initial : Formlet<string> =
+  let inline text hint initial : Formlet<string> =
     Ft <| fun ig fp m d ->
       let v =
         match m with
@@ -54,13 +134,12 @@ module Formlet =
 
       let aa : IHTMLProp list =
           [
-  // TODO: OnBlur preferable as it forces less rebuilds, but default value causes resets to be missed
-  // TODO: Fix reset
-            DefaultValue  v
-            OnBlur        <| fun v -> update d (box v.target :?> Fable.Import.Browser.HTMLInputElement).value
-  //              OnChange      <| fun v -> update d v.Value
+// TODO: OnBlur preferable as it forces less rebuilds, but default value causes resets to be missed
+//            DefaultValue  v
+//            OnBlur        <| fun v -> update d (box v.target :?> Fable.Import.Browser.HTMLInputElement).value
+            OnChange      <| fun v -> update d v.Value
             Placeholder   hint
-  //              Value         v
+            Value         v
           ]
 
       let tvt = delayedElement input aa "form-control" []
@@ -69,7 +148,7 @@ module Formlet =
 
   /// Primitive labeled checkbox input formlet
   ///   Requires an id to associate the label with the checkbox
-  let checkBox lbl : Formlet<bool> =
+  let inline checkBox lbl : Formlet<bool> =
     Ft <| fun ig fp m d ->
       let id        = IdGenerator.Next ig
       let isChecked =
@@ -94,7 +173,7 @@ module Formlet =
       isChecked, tvt, zero ()
 
   /// Primitive select input formlet
-  let select initial (options : (string*'T) array) : Formlet<'T> =
+  let inline select initial (options : (string*'T) array) : Formlet<'T> =
     if options.Length = 0 then failwithf "select requires 1 or more options"
 
     let options_ =
@@ -127,7 +206,7 @@ module Formlet =
 
   /// Adds a label to a Formlet
   ///   Requires an id to associate the label with the visual element
-  let withLabel lbl t : Formlet<_> =
+  let inline withLabel lbl t : Formlet<_> =
     let t = adapt t
     Ft <| fun ig fp m d ->
       let id            = IdGenerator.Next ig
@@ -140,7 +219,7 @@ module Formlet =
       tv, tvt, tft
 
   /// Adds a validation feedback to a Formlet
-  let withValidationFeedback t : Formlet<_> =
+  let inline withValidationFeedback t : Formlet<_> =
     let t = adapt t
     Ft <| fun ig fp m d ->
       let tv, tvt, tft  = invoke t ig fp m d
@@ -163,60 +242,14 @@ module Formlet =
   /// Makes a Formlet optional by displaying a check box that when ticked
   ///   shows the visual element for t.
   ///   Requires an id to associate the label with the visual element
-  let withOption lbl t : Formlet<_ option> =
+  let inline withOption lbl t : Formlet<_ option> =
     checkBox lbl >>= (fun v -> if v then Formlet.map t Some else Formlet.value None)
 
   /// Wraps the Formlet in a div with class "form-group"
-  let withFormGroup t = Formlet.withContainer div t |> Formlet.withClass "form-group"
+  let inline withFormGroup t = Formlet.withContainer div t |> Formlet.withClass "form-group"
 
-  /// Maps a Formlet into a Form, a Form is usuable with Fable.Elmish MVU.
-  ///   As the Formlet Model and the MVU model might be different the caller
-  ///   needs to supply extractModel which extracts the Formlet Model from the
-  ///   MVU model.
-  ///   In addition the called provides callbacks how to handle onUpdate, onCommit,
-  ///   onCancel and onReset.
-  let asForm extractModel onUpdate onCommit onCancel onReset (t : Formlet<'T>) : Form<'Model, 'Msg> =
-    let t = adapt t
-    F <| fun m d ->
-      let ig            = IdGenerator.New 1000
-      let tv, tvt, tft  = invoke t ig [] (extractModel m) (Dispatcher.D <| fun mu -> onUpdate d mu)
-
-      let tes           = flatten tvt
-      let tfs           = flatten tft
-      let valid         = isGood tft
-      let onCommit d    = if valid then onCommit d tv else ()
-      let lis           =
-        tfs
-        |> Array.map (fun (s, p, m) ->
-          let p   = pathToString p
-          let cls = if s then "list-group-item list-group-item-warning" else "list-group-item list-group-item-danger"
-          li [|Class cls|] [|str (sprintf "§ %s - %s" p m)|])
-      let ul            = ul [|Class "list-group"; Style [CSSProp.MarginBottom "12px"]|] lis
-      let be            =
-        let inline btn action cls lbl dis =
-          button
-            [|
-              Class   cls
-              Disabled dis
-              OnClick <|fun _ -> action d
-              Style   [CSSProp.MarginRight "8px"]
-              Type    "button"
-            |]
-            [|str lbl|]
-        div
-          [|Style [CSSProp.MarginBottom "12px"; CSSProp.MarginTop "12px"]|]
-          [|
-            btn onCommit "btn btn-primary" "Commit" (not valid)
-            btn onCancel "btn"             "Cancel" false
-            btn onReset  "btn"             "Reset"  false
-          |]
-
-      form
-        [||]
-        [|
-          be
-          ul
-          (if tes.Length > 0 then div [||] tes else tes.[0])
-          be
-        |]
-
+  // Creates a Form element from a formlet
+  //  onCommit is called when user clicks Commit
+  //  onCancel is called when user clicks Cancel
+  let inline mkForm formlet onCommit onCancel : ReactElement = 
+    ofType<FormletComponent<_>,_,_> { Formlet = formlet; OnCommit = onCommit; OnCancel = onCancel } []

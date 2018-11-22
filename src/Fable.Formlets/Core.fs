@@ -115,18 +115,13 @@ type IdGenerator =
 type Dispatcher =
   | D of (ModelUpdate -> unit)
 
-  static member Update (D d) v  : unit        = d (ModelUpdate.Update v)
-  static member Left   (D d)    : Dispatcher  = D (fun mu -> d (ModelUpdate.Left mu))
-  static member Right  (D d)    : Dispatcher  = D (fun mu -> d (ModelUpdate.Right mu))
+  static member inline Update (D d) v  : unit        = d (ModelUpdate.Update v)
+  static member inline Left   (D d)    : Dispatcher  = D (fun mu -> d (ModelUpdate.Left mu))
+  static member inline Right  (D d)    : Dispatcher  = D (fun mu -> d (ModelUpdate.Right mu))
 
 /// Formlet is a function that given a path to the current model element, a model element
 ///   and dispatcher function generates a value 'T, the view tree and the failure tree.
 type Formlet<'T> = Ft of (IdGenerator -> FormletPath -> Model -> Dispatcher -> 'T*ViewTree*FailureTree)
-
-/// Form is a function that given a Model and a Dispatcher function creates a ReactElement.
-///   The formlet isn't directly usable in a Fable.Elmish view, instead the Formlet is wrapped
-///   in a Form that fits the MVU model
-type Form<'Model, 'Msg> = F of ('Model -> ('Msg -> unit) -> ReactElement)
 
 module Details =
   // TODO: Why doesn't this work?
@@ -224,21 +219,15 @@ type ViewTree with
     Loops.ViewTree.flatten ra [] "" [] vt
     ra.ToArray ()
 
-/// Form exposes view/update to be used in with Fable.Elmish MVU
-module Form =
-  let initial : Model = zero ()
-
-  let view (F f) m d : ReactElement = f m d
-
-  let update msg m : Model = Loops.Form.update msg m
-
 /// Formlets are composable form elements allowing reactive forms to be created
 ///   from basic primitives.
 module Formlet =
+  let inline update m msg : Model = Loops.Form.update msg m
+
   // TODO: do we benefit from inlining these functions?
 
   /// A Formlet that always produces value and no visual element
-  let value v : Formlet<_> =
+  let inline value v : Formlet<_> =
     Ft <| fun ig fp m d ->
       v, zero (), zero ()
 
@@ -246,7 +235,7 @@ module Formlet =
 
   /// Monadic bind for Formlets, usually you should try to use
   ///   apply over bind as it is allows for better caching of resources.
-  let bind t uf : Formlet<_> =
+  let inline bind t uf : Formlet<_> =
     let t = adapt t
     Ft <| fun ig fp m d ->
       let tm, um =
@@ -261,11 +250,11 @@ module Formlet =
 
       uv, join tvt uvt, join tft uft
 
-  let unlift t : Formlet<_> =
+  let inline unlift t : Formlet<_> =
     bind t id
 
   // Combines the result of two formlets using a combination function
-  let combine f t u : Formlet<_> =
+  let inline combine f t u : Formlet<_> =
     let t = adapt t
     let u = adapt u
     Ft <| fun ig fp m d ->
@@ -280,16 +269,16 @@ module Formlet =
       (f tv uv), join tvt uvt, join tft uft
 
   /// Applicative functor apply
-  let apply     t u : Formlet<_> = combine Combinations.apply     t u
+  let inline apply     t u : Formlet<_> = combine Combinations.apply     t u
   /// Combines the result of two formlets as a pair
-  let andAlso   t u : Formlet<_> = combine Combinations.andAlso   t u
+  let inline andAlso   t u : Formlet<_> = combine Combinations.andAlso   t u
   /// Combines the result of two formlets, keep left result
-  let keepLeft  t u : Formlet<_> = combine Combinations.keepLeft  t u
+  let inline keepLeft  t u : Formlet<_> = combine Combinations.keepLeft  t u
   /// Combines the result of two formlets, keep right result
-  let keepRight t u : Formlet<_> = combine Combinations.keepRight t u
+  let inline keepRight t u : Formlet<_> = combine Combinations.keepRight t u
 
   /// Functor map
-  let map t f : Formlet<_> =
+  let inline map t f : Formlet<_> =
     let t = adapt t
     Ft <| fun ig fp m d ->
       let tv, tvt, tft  = invoke t ig fp m d
@@ -299,7 +288,7 @@ module Formlet =
   /// Appends an attribute to visual element of t
   ///  Note; Class and Style should be append using withClass and withStyle to
   ///  allow aggregating of them
-  let withAttribute p t : Formlet<_> =
+  let inline withAttribute p t : Formlet<_> =
     let t = adapt t
     Ft <| fun ig fp m d ->
       let tv, tvt, tft  = invoke t ig fp m d
@@ -308,7 +297,7 @@ module Formlet =
       tv, tvt, tft
 
   /// Appends a class to visual element of t
-  let withClass c t : Formlet<_> =
+  let inline withClass c t : Formlet<_> =
     let t = adapt t
     Ft <| fun ig fp m d ->
       let tv, tvt, tft  = invoke t ig fp m d
@@ -317,7 +306,7 @@ module Formlet =
       tv, tvt, tft
 
   /// Appends a style to visual element of t
-  let withStyle s t : Formlet<_> =
+  let inline withStyle s t : Formlet<_> =
     let t = adapt t
     Ft <| fun ig fp m d ->
       let tv, tvt, tft  = invoke t ig fp m d
@@ -326,7 +315,7 @@ module Formlet =
       tv, tvt, tft
 
   /// Wraps the visual element of t inside a container (like div)
-  let withContainer c t : Formlet<_> =
+  let inline withContainer c t : Formlet<_> =
     let t = adapt t
     Ft <| fun ig fp m d ->
       let tv, tvt, tft  = invoke t ig fp m d
@@ -339,10 +328,10 @@ module Formlet =
   /// Computation expression builder for formlets
   type Builder () =
     class
-      member x.Bind       (t, uf) = bind  t uf
-      member x.Return     v       = value v
-      member x.ReturnFrom t       = t : Formlet<_>
-      member x.Zero       ()      = value ()
+      member inline x.Bind       (t, uf) = bind  t uf
+      member inline x.Return     v       = value v
+      member inline x.ReturnFrom t       = t : Formlet<_>
+      member inline x.Zero       ()      = value ()
     end
 
 /// Computation expression builder for formlets
@@ -356,15 +345,16 @@ type Formlet<'T> with
   static member inline (<&>) (f, t)  = Formlet.andAlso   f t
   static member inline (.>>.)(f, t)  = Formlet.andAlso   f t
   static member inline (.>>) (f, t)  = Formlet.keepLeft  f t
+  static member inline (>>.) (f, t)  = Formlet.keepRight f t
 
 /// Formlets combinators that validate the result of a Formlet
 module Validate =
 
   /// Always succeeds
-  let yes t : Formlet<_> = t
+  let inline yes t : Formlet<_> = t
 
   /// Formlet fails to validate with msg if v return false
-  let test (v : 'T -> bool) (msg : string) t : Formlet<_> =
+  let inline test (v : 'T -> bool) (msg : string) t : Formlet<_> =
     let t = adapt t
     Ft <| fun ig fp m d ->
       let tv, tvt, tft  = invoke t ig fp m d
@@ -376,9 +366,9 @@ module Validate =
       tv, tvt, tft
 
   /// Formlet fails to validate if empty string
-  let notEmpty t : Formlet<string> =
+  let inline notEmpty t : Formlet<string> =
     test (fun v -> String.length v > 0) "You must provide a value." t
 
   /// Formlet fails to validate with msg if string don't match regex r
-  let regex (r : Regex) (msg : string) t : Formlet<string> =
+  let inline regex (r : Regex) (msg : string) t : Formlet<string> =
     test r.IsMatch msg t
