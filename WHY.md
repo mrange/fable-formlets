@@ -81,6 +81,8 @@ ReactDom.render(element, document.getElementById("react-app"))
 
 ![The full customer formlet](images/example-0005.PNG)
 
+Test a more complex [formlet](https://mrange.github.io/diversion/formlets/) live.
+
 I think Formlets are a great way to create great forms quickly and I wished more developers talked about them.
 
 ## What is fable-formlets?
