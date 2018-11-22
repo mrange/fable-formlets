@@ -18,11 +18,6 @@ module App
 
 open Fable.Import
 open Fable.Import.Browser
-open Fable.Import.React
-
-open Fable.Helpers.React
-open Fable.Helpers.React.Props
-
 open Fable.Formlets.Core
 open Fable.Formlets.Bootstrap
 
@@ -156,103 +151,15 @@ let sampleFormlet =
   // Note the user of withOption to create an optional delivery address input
   <*> (address "Delivery address" |> Formlet.withOption "Use delivery address?")
 
-type FormletProps<'T> = 
-  { 
-    Formlet   : Formlet<'T>
-    OnCommit  : 'T -> unit
-    OnCancel  : unit -> unit
-  }
-
-type FormletState = 
-  { 
-    Model : Model
-  }
-  static member Zero : FormletState = { Model = Model.Empty }
-
-open Details
-
-type FormletComponent<'T>(initialProps : FormletProps<'T>) =
-  inherit Component<FormletProps<'T>, FormletState>(initialProps)
-  do
-    base.setInitState FormletState.Zero
-
-  member x.updateModel mu =
-    printfn "updateModel"
-    printfn "ModelUpdate  : %A" mu
-    printfn "BeforeUpdate : %A" x.state.Model
-    let m = Formlet.update mu x.state.Model
-    printfn "AfterUpdate  : %A" m
-    x.setState { Model = m }
-    ()
-
-  member x.commit tv =
-    printfn "commit: %A" tv
-    x.props.OnCommit tv
-    ()
-
-  member x.cancel () =
-    printfn "cancel"
-    x.props.OnCancel ()
-    ()
-
-  member x.reset () =
-    printfn "reset"
-    x.setState { Model = Model.Empty }
-    ()
-
-  override x.render() =
-    printfn "render: %A" x.state.Model 
-    let t             = x.props.Formlet
-    let t             = adapt t
-    let ig            = IdGenerator.New 1000
-    let tv, tvt, tft  = invoke t ig [] x.state.Model (Dispatcher.D x.updateModel)
-
-    let tes           = flatten tvt
-    let tfs           = flatten tft
-    let valid         = isGood tft
-    let onCommit _    = if valid then x.commit tv else ()
-    let onCancel _    = x.cancel ()
-    let onReset  _    = x.reset ()
-    let lis           =
-      tfs
-      |> Array.map (fun (s, p, m) ->
-        let p   = pathToString p
-        let cls = if s then "list-group-item list-group-item-warning" else "list-group-item list-group-item-danger"
-        li [|Class cls|] [|str (sprintf "§ %s - %s" p m)|])
-    let ul            = ul [|Class "list-group"; Style [CSSProp.MarginBottom "12px"]|] lis
-    let be            =
-      let inline btn action cls lbl dis =
-        button
-          [|
-            Class   cls
-            Disabled dis
-            OnClick action
-            Style   [CSSProp.MarginRight "8px"]
-            Type    "button"
-          |]
-          [|str lbl|]
-      div
-        [|Style [CSSProp.MarginBottom "12px"; CSSProp.MarginTop "12px"]|]
-        [|
-          btn onCommit  "btn btn-primary" "Commit" (not valid)
-          btn onCancel  "btn"             "Cancel" false
-          btn onReset   "btn"             "Reset"  false
-        |]
-
-    form
-      [|Style [CSSProp.Margin "12px"]|]
-      [|
-        be
-        ul
-        (if tes.Length > 0 then div [||] tes else tes.[0])
-        be
-      |]
-
-let inline formletComponent formlet onCommit onCancel = 
-  ofType<FormletComponent<_>,_,_> { Formlet = formlet; OnCommit = onCommit; OnCancel = onCancel } []
-
 let onCommit tv = printfn "Success: %A" tv
 let onCancel () = printfn "Cancelled"
-  
-let element = formletComponent sampleFormlet onCommit onCancel
+
+let input lbl hint validation =
+  Formlet.text hint ""                // Text input
+  |> validation               // Apply validation
+  |> Formlet.withLabel lbl            // label the text input
+  |> Formlet.withValidationFeedback   // Display validation failures
+  |> Formlet.withFormGroup            // Wrap it in a form-group (Bootstrap)
+
+let element = Formlet.mkForm sampleFormlet onCommit onCancel
 ReactDom.render(element, document.getElementById("elmish-app"))

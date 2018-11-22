@@ -54,7 +54,7 @@ let newUser : Formlet<string*string*string option> =
   formlet {
     let! firstName  = input "First name" "Enter first name" notEmpty
     let! lastName   = input "Last name"  "Enter last name"  notEmpty
-    let! hasNick    = checkBox "has-nick" "Do you have a nick name?"
+    let! hasNick    = checkBox "Do you have a nick name?"
     let! nickName   =
       if hasNick then input "Nick name"  "Enter nick name"  notEmpty |>> Some
       else value None
@@ -66,12 +66,26 @@ let newUser : Formlet<string*string*string option> =
 
 The cool thing is that the user will see a checkbox that when ticked will display a required text input for the nick. Normally optional behavior in forms require some kind of event handling, not so with formlets.
 
+In order to render a formlet we use `Formlet.mkElement`
+
+We render the formlet like a React component:
+
+```fsharp
+// onCommit is called when user click onCommit with the value produced by the Formlet
+// onCancel is called when user click onCancel
+let element = Formlet.mkForm newUser onCommit onCancel
+ReactDom.render(element, document.getElementById("elmish-app"))
+```
+
+`mkForm` adds Commit, Cancel and Reset buttons as well as showing the validations errors in a summary.
+
+![The full customer formlet](images/example-0005.PNG)
 
 I think Formlets are a great way to create great forms quickly and I wished more developers talked about them.
 
 ## What is fable-formlets?
 
-What is great about formlets is that they can be built upon almost any UI frameworks. `fable-formlets` is a small formlet library to demonstrate formlets running on top of Fable.Elmish Model-View-Update architecture.
+What is great about formlets is that they can be built upon almost any UI frameworks. `fable-formlets` is a small formlet library to demonstrate formlets running on top of Fable.React.
 
 Currently `fable-formlets` is merely a functionally demo and not a serious library.
 
@@ -84,14 +98,6 @@ type Formlet<'T> = Ft of (IdGenerator -> FormletPath -> Model -> Dispatcher -> '
 That is; a formlet is function that given a id generator, a path that indicates where we are in the model, the current model element and a dispatcher (that allows the view element dispatch a message to update the model). This function produces a value 'T, a view tree and a failure tree.
 
 A formlet always produces a value in order to make `bind` not shortcut the rest of the formlet. The value is valid if the `FailureTree.IsGood x` is `true`.
-
-As a formlet isn't directly usable in a Formlet.Elmish application, there are functions that convers a formlet into a form.
-
-```fsharp
-type Form<'Model, 'Msg> = F of ('Model -> ('Msg -> unit) -> ReactElement)
-```
-
-A Formlet.Elmish application uses `Form.view` and `Form.update` to render and update the form.
 
 For formlet we define the usual combinators; `bind`, `apply`, `map` and a few others. While `bind` is one of the most flexible ways to compose formlets it is preferable to use `apply` for performance reasons, like so:
 
@@ -133,8 +139,8 @@ let text hint initial : Formlet<string> =
     // These are the attributes we like to add to the input element
     let aa : IHTMLProp list =
         [
-          DefaultValue  v
-          OnBlur        <| fun v -> update d (box v.target :?> Fable.Import.Browser.HTMLInputElement).value
+          Value         v
+          OnChange      <| fun v -> update d v.Value
           Placeholder   hint
         ]
 
@@ -143,7 +149,7 @@ let text hint initial : Formlet<string> =
     //  input element
     //  Class and Style attribute are specified separately because they need to
     //  be accumulated
-    //  input is normal Fable.elmish input element constructor
+    //  input is normal Fable.React input element constructor
     //  "form-control" is the bootstrap style
     let tvt = delayedElement input aa "form-control" []
 
@@ -182,9 +188,9 @@ So it's nice with out of the box input elements but it is possible to extend wit
 
 ## Conclusion
 
-In my opinion, Formlets are great for building forms, they are extendable, they work great with Fable.Elmish.
+In my opinion, Formlets are great for building forms, they are extendable, they work great with Fable.React.
 
-`fable-formlets` might not be right implementation of formlets for Fable.Elmish, perhaps someone more clever can pick up the idea and do a proper implementation.
+`fable-formlets` might not be right implementation of formlets for Fable.React, perhaps someone more clever can pick up the idea and do a proper implementation.
 
 _Let's talk about formlets._
 
