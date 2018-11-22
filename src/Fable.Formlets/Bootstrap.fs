@@ -28,7 +28,7 @@ module Formlet =
 
   /// Wraps the visual element of t inside a labeled card container
   ///   The label is added to the formlet path
-  let withCard lbl t : Formlet<_> =
+  let inline withCard lbl t : Formlet<_> =
     let t = adapt t
     Ft <| fun ig fp m d ->
       let fp            = (FormletPathElement.Named lbl)::fp
@@ -45,7 +45,7 @@ module Formlet =
       tv, tvt, tft
 
   /// Primitive text input formlet
-  let text hint initial : Formlet<string> =
+  let inline text hint initial : Formlet<string> =
     Ft <| fun ig fp m d ->
       let v =
         match m with
@@ -54,13 +54,13 @@ module Formlet =
 
       let aa : IHTMLProp list =
           [
-  // TODO: OnBlur preferable as it forces less rebuilds, but default value causes resets to be missed
-  // TODO: Fix reset
-            DefaultValue  v
-            OnBlur        <| fun v -> update d (box v.target :?> Fable.Import.Browser.HTMLInputElement).value
-  //              OnChange      <| fun v -> update d v.Value
+// TODO: OnBlur preferable as it forces less rebuilds, but default value causes resets to be missed
+// TODO: Fix reset
+//            DefaultValue  v
+//            OnBlur        <| fun v -> update d (box v.target :?> Fable.Import.Browser.HTMLInputElement).value
+            OnChange      <| fun v -> update d v.Value
             Placeholder   hint
-  //              Value         v
+            Value         v
           ]
 
       let tvt = delayedElement input aa "form-control" []
@@ -69,7 +69,7 @@ module Formlet =
 
   /// Primitive labeled checkbox input formlet
   ///   Requires an id to associate the label with the checkbox
-  let checkBox lbl : Formlet<bool> =
+  let inline checkBox lbl : Formlet<bool> =
     Ft <| fun ig fp m d ->
       let id        = IdGenerator.Next ig
       let isChecked =
@@ -94,7 +94,7 @@ module Formlet =
       isChecked, tvt, zero ()
 
   /// Primitive select input formlet
-  let select initial (options : (string*'T) array) : Formlet<'T> =
+  let inline select initial (options : (string*'T) array) : Formlet<'T> =
     if options.Length = 0 then failwithf "select requires 1 or more options"
 
     let options_ =
@@ -127,7 +127,7 @@ module Formlet =
 
   /// Adds a label to a Formlet
   ///   Requires an id to associate the label with the visual element
-  let withLabel lbl t : Formlet<_> =
+  let inline withLabel lbl t : Formlet<_> =
     let t = adapt t
     Ft <| fun ig fp m d ->
       let id            = IdGenerator.Next ig
@@ -140,7 +140,7 @@ module Formlet =
       tv, tvt, tft
 
   /// Adds a validation feedback to a Formlet
-  let withValidationFeedback t : Formlet<_> =
+  let inline withValidationFeedback t : Formlet<_> =
     let t = adapt t
     Ft <| fun ig fp m d ->
       let tv, tvt, tft  = invoke t ig fp m d
@@ -163,8 +163,8 @@ module Formlet =
   /// Makes a Formlet optional by displaying a check box that when ticked
   ///   shows the visual element for t.
   ///   Requires an id to associate the label with the visual element
-  let withOption lbl t : Formlet<_ option> =
+  let inline withOption lbl t : Formlet<_ option> =
     checkBox lbl >>= (fun v -> if v then Formlet.map t Some else Formlet.value None)
 
   /// Wraps the Formlet in a div with class "form-group"
-  let withFormGroup t = Formlet.withContainer div t |> Formlet.withClass "form-group"
+  let inline withFormGroup t = Formlet.withContainer div t |> Formlet.withClass "form-group"
