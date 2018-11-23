@@ -110,6 +110,7 @@ let sampleFormlet =
     <*> input "First name" "Enter first name" Validate.notEmpty
     <*> input "Last name"  "Enter last name"  Validate.notEmpty
     <*> input "Social no"  "Enter social no"  (Validate.notEmpty >> validateSocialNo)
+    |> Formlet.withSubModel "Individual"
     |> Formlet.withCard "Individual"
     |>> Individual
 
@@ -117,6 +118,7 @@ let sampleFormlet =
     Formlet.value Company.New
     <*> input "Name"        "Enter company name"  Validate.notEmpty
     <*> input "Company no"  "Enter company no"    Validate.notEmpty
+    |> Formlet.withSubModel "Company"
     |> Formlet.withCard "Company"
     |>> Company
 
@@ -153,13 +155,6 @@ let sampleFormlet =
 
 let onCommit tv = printfn "Success: %A" tv
 let onCancel () = printfn "Cancelled"
-
-let input lbl hint validation =
-  Formlet.text hint ""                // Text input
-  |> validation               // Apply validation
-  |> Formlet.withLabel lbl            // label the text input
-  |> Formlet.withValidationFeedback   // Display validation failures
-  |> Formlet.withFormGroup            // Wrap it in a form-group (Bootstrap)
 
 let element = Formlet.mkForm sampleFormlet onCommit onCancel
 ReactDom.render(element, document.getElementById("react-app"))

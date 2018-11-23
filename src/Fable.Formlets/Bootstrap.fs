@@ -27,15 +27,15 @@ open Fable.Formlets.Core.Details
 
 open System.Text
 
-type FormletProps<'T> = 
-  { 
+type FormletProps<'T> =
+  {
     Formlet   : Formlet<'T>
     OnCommit  : 'T -> unit
     OnCancel  : unit -> unit
   }
 
-type FormletState = 
-  { 
+type FormletState =
+  {
     Model : Model
   }
   static member Zero : FormletState = { Model = Model.Empty }
@@ -204,20 +204,6 @@ module Formlet =
 
       snd v, tvt, zero ()
 
-  /// Adds a label to a Formlet
-  ///   Requires an id to associate the label with the visual element
-  let inline withLabel lbl t : Formlet<_> =
-    let t = adapt t
-    Ft <| fun ig fp m d ->
-      let id            = IdGenerator.Next ig
-      let fp            = (FormletPathElement.Named lbl)::fp
-      let tv, tvt, tft  = invoke t ig fp m d
-      let e             = label [|HTMLAttr.HtmlFor id|] [|str lbl|]
-      let tvt           = ViewTree.WithAttribute (Id id, tvt)
-      let tvt           = join (ViewTree.Element e) tvt
-
-      tv, tvt, tft
-
   /// Adds a validation feedback to a Formlet
   let inline withValidationFeedback t : Formlet<_> =
     let t = adapt t
@@ -251,5 +237,5 @@ module Formlet =
   // Creates a Form element from a formlet
   //  onCommit is called when user clicks Commit
   //  onCancel is called when user clicks Cancel
-  let inline mkForm formlet onCommit onCancel : ReactElement = 
+  let inline mkForm formlet onCommit onCancel : ReactElement =
     ofType<FormletComponent<_>,_,_> { Formlet = formlet; OnCommit = onCommit; OnCancel = onCancel } []
