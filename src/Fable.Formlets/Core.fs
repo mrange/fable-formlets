@@ -26,12 +26,12 @@ open System.Text
 open System.Text.RegularExpressions
 
 [<RequireQualifiedAccess>]
-type FormletPathElement =
+type ModelPathElement =
   | Named   of string
 
 /// FormletPath is the implicit path to the Formlet elements
 ///   Used to generate contextful validation errors
-type FormletPath = FormletPathElement list
+type ModelPath = ModelPathElement list
 
 /// FailureTree represents the failure state of a value generated
 ///   when invoking the Formlet. If the failure tree "IsGood" the
@@ -40,7 +40,7 @@ type FormletPath = FormletPathElement list
 [<RequireQualifiedAccess>]
 type FailureTree =
   | Empty
-  | Leaf        of FormletPath*string
+  | Leaf        of ModelPath*string
   | Suppress    of FailureTree
   | Fork        of FailureTree*FailureTree
 
@@ -105,14 +105,14 @@ type ViewTree =
     | _           , Empty       -> l
     | _           , _           -> Fork (l, r)
 
-type IdGenerator =
-  | G of (unit -> string)
+type FormletContext =
+  | Fc of (unit -> string)
 
-  static member Next (G g) : string = g ()
+  static member NextId (Fc g) : string = g ()
 
   static member New initial =
     let mutable i = initial
-    G (fun () -> i <- i + 1; sprintf "id-%d" i)
+    Fc (fun () -> i <- i + 1; sprintf "id-%d" i)
 
 /// Dispatcher is a callback used by the view to indicate a model change.
 type Dispatcher =
@@ -125,14 +125,14 @@ type Dispatcher =
 
 /// Formlet is a function that given a path to the current model element, a model element
 ///   and dispatcher function generates a value 'T, the view tree and the failure tree.
-type Formlet<'T> = Ft of (IdGenerator -> FormletPath -> Model -> Dispatcher -> 'T*ViewTree*FailureTree)
+type Formlet<'T> = Ft of (FormletContext -> ModelPath -> Model -> Dispatcher -> 'T*ViewTree*FailureTree)
 
 module Details =
   // TODO: Why doesn't this work?
   //let inline adapt  (Ft f)        = OptimizedClosures.FSharpFunc<_, _, _, _, _>.Adapt f
   //let inline invoke f fp ps m d   = (f : OptimizedClosures.FSharpFunc<_, _, _, _, _>).Invoke (fp, ps, m, d)
   let inline adapt  (Ft f)        = f
-  let inline invoke f ig fp m d   = f ig fp m d
+  let inline invoke f fc mp m d   = f fc mp m d
 
   let inline flip f a b           = f b a
 
@@ -144,7 +144,7 @@ module Details =
     let inline app s = sb.Append (s : string) |> ignore
     match ps with
     | []                                -> ()
-    | (FormletPathElement.Named n)::ps  -> pathStringLoop sb ps; app "."; app n
+    | (ModelPathElement.Named n)::ps  -> pathStringLoop sb ps; app "."; app n
 
   let pathToString ps =
     let sb = StringBuilder 16
@@ -215,7 +215,7 @@ module Details =
 open Details
 
 type FailureTree with
-  static member Flatten ft  : (bool*FormletPath*string) array =
+  static member Flatten ft  : (bool*ModelPath*string) array =
     let ra = ResizeArray<_> 16
     Loops.FailureTree.flatten ra false ft
     ra.ToArray ()
@@ -235,7 +235,7 @@ module Formlet =
 
   /// A Formlet that always produces value and no visual element
   let inline value v : Formlet<_> =
-    Ft <| fun ig fp m d ->
+    Ft <| fun fc mp m d ->
       v, zero (), zero ()
 
   let inline lift v = value v
@@ -244,16 +244,16 @@ module Formlet =
   ///   apply over bind as it is allows for better caching of resources.
   let inline bind t uf : Formlet<_> =
     let t = adapt t
-    Ft <| fun ig fp m d ->
+    Ft <| fun fc mp m d ->
       let tm, um =
         match m with
         | Model.Fork (l, r) -> l, r
         | _                 -> zero (), zero ()
 
-      let tv, tvt, tft  = invoke t ig fp tm (left d)
+      let tv, tvt, tft  = invoke t fc mp tm (left d)
       let u             = uf tv
       let u             = adapt u
-      let uv, uvt, uft  = invoke u ig fp um (right d)
+      let uv, uvt, uft  = invoke u fc mp um (right d)
 
       uv, join tvt uvt, join tft uft
 
@@ -264,14 +264,14 @@ module Formlet =
   let inline combine f t u : Formlet<_> =
     let t = adapt t
     let u = adapt u
-    Ft <| fun ig fp m d ->
+    Ft <| fun fc mp m d ->
       let tm, um =
         match m with
         | Model.Fork (l, r) -> l, r
         | _                 -> zero (), zero ()
 
-      let tv, tvt, tft  = invoke t ig fp tm (left d)
-      let uv, uvt, uft  = invoke u ig fp um (right d)
+      let tv, tvt, tft  = invoke t fc mp tm (left d)
+      let uv, uvt, uft  = invoke u fc mp um (right d)
 
       (f tv uv), join tvt uvt, join tft uft
 
@@ -287,27 +287,27 @@ module Formlet =
   /// Functor map
   let inline map t f : Formlet<_> =
     let t = adapt t
-    Ft <| fun ig fp m d ->
-      let tv, tvt, tft  = invoke t ig fp m d
+    Ft <| fun fc mp m d ->
+      let tv, tvt, tft  = invoke t fc mp m d
 
       f tv, tvt, tft
 
   let inline withSubModel n t : Formlet<_> =
     let t = adapt t
-    Ft <| fun ig fp m d ->
+    Ft <| fun fc mp m d ->
       let sm =
         match m with
         | Model.SubModel (nn, sm) when n = nn -> sm
         | _                                   -> zero ()
-      invoke t ig fp sm (subModel d n)
+      invoke t fc mp sm (subModel d n)
 
   /// Appends an attribute to visual element of t
   ///  Note; Class and Style should be append using withClass and withStyle to
   ///  allow aggregating of them
   let inline withAttribute p t : Formlet<_> =
     let t = adapt t
-    Ft <| fun ig fp m d ->
-      let tv, tvt, tft  = invoke t ig fp m d
+    Ft <| fun fc mp m d ->
+      let tv, tvt, tft  = invoke t fc mp m d
       let tvt           = ViewTree.WithAttribute (p, tvt)
 
       tv, tvt, tft
@@ -315,8 +315,8 @@ module Formlet =
   /// Appends a class to visual element of t
   let inline withClass c t : Formlet<_> =
     let t = adapt t
-    Ft <| fun ig fp m d ->
-      let tv, tvt, tft  = invoke t ig fp m d
+    Ft <| fun fc mp m d ->
+      let tv, tvt, tft  = invoke t fc mp m d
       let tvt           = ViewTree.WithClass (c, tvt)
 
       tv, tvt, tft
@@ -324,8 +324,8 @@ module Formlet =
   /// Appends a style to visual element of t
   let inline withStyle s t : Formlet<_> =
     let t = adapt t
-    Ft <| fun ig fp m d ->
-      let tv, tvt, tft  = invoke t ig fp m d
+    Ft <| fun fc mp m d ->
+      let tv, tvt, tft  = invoke t fc mp m d
       let tvt           = ViewTree.WithStyle (s, tvt)
 
       tv, tvt, tft
@@ -333,8 +333,8 @@ module Formlet =
   /// Wraps the visual element of t inside a container (like div)
   let inline withContainer c t : Formlet<_> =
     let t = adapt t
-    Ft <| fun ig fp m d ->
-      let tv, tvt, tft  = invoke t ig fp m d
+    Ft <| fun fc mp m d ->
+      let tv, tvt, tft  = invoke t fc mp m d
       let tes           = flatten tvt
       let d             = (flip c) tes
       let tvt           = delayedElement_ d
@@ -345,10 +345,10 @@ module Formlet =
   ///   Requires an id to associate the label with the visual element
   let inline withLabel lbl t : Formlet<_> =
     let t = adapt t
-    Ft <| fun ig fp m d ->
-      let id            = IdGenerator.Next ig
-      let fp            = (FormletPathElement.Named lbl)::fp
-      let tv, tvt, tft  = invoke t ig fp m d
+    Ft <| fun fc mp m d ->
+      let id            = FormletContext.NextId fc
+      let mp            = (ModelPathElement.Named lbl)::mp
+      let tv, tvt, tft  = invoke t fc mp m d
       let e             = label [|HTMLAttr.HtmlFor id|] [|str lbl|]
       let tvt           = ViewTree.WithAttribute (Id id, tvt)
       let tvt           = join (ViewTree.Element e) tvt
@@ -386,10 +386,10 @@ module Validate =
   /// Formlet fails to validate with msg if v return false
   let inline test (v : 'T -> bool) (msg : string) t : Formlet<_> =
     let t = adapt t
-    Ft <| fun ig fp m d ->
-      let tv, tvt, tft  = invoke t ig fp m d
+    Ft <| fun fc mp m d ->
+      let tv, tvt, tft  = invoke t fc mp m d
       let valid         = v tv
-      let tft           = if valid then tft else join tft (FailureTree.Leaf (fp, msg))
+      let tft           = if valid then tft else join tft (FailureTree.Leaf (mp, msg))
       // TODO: This is really bootstrap and this should be moved into bootstrap somehow
       let tvt           = ViewTree.WithClass ((if valid then "is-valid" else "is-invalid"), tvt)
 

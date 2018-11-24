@@ -60,7 +60,7 @@ type FormletComponent<'T>(initialProps : FormletProps<'T>) =
   override x.render() : ReactElement =
     let t             = x.props.Formlet
     let t             = adapt t
-    let ig            = IdGenerator.New 1000
+    let ig            = FormletContext.New 1000
     let tv, tvt, tft  = invoke t ig [] x.state.Model (Dispatcher.D x.updateModel)
 
     let tes           = flatten tvt
@@ -110,9 +110,9 @@ module Formlet =
   ///   The label is added to the formlet path
   let inline withCard lbl t : Formlet<_> =
     let t = adapt t
-    Ft <| fun ig fp m d ->
-      let fp            = (FormletPathElement.Named lbl)::fp
-      let tv, tvt, tft  = invoke t ig fp m d
+    Ft <| fun fc mp m d ->
+      let mp            = (ModelPathElement.Named lbl)::mp
+      let tv, tvt, tft  = invoke t fc mp m d
       let tes           = flatten tvt
       let d             =
         flip div
@@ -126,7 +126,7 @@ module Formlet =
 
   /// Primitive text input formlet
   let inline text hint initial : Formlet<string> =
-    Ft <| fun ig fp m d ->
+    Ft <| fun fc mp m d ->
       let v =
         match m with
         | Model.Value v -> v
@@ -149,8 +149,8 @@ module Formlet =
   /// Primitive labeled checkbox input formlet
   ///   Requires an id to associate the label with the checkbox
   let inline checkBox lbl : Formlet<bool> =
-    Ft <| fun ig fp m d ->
-      let id        = IdGenerator.Next ig
+    Ft <| fun fc mp m d ->
+      let id        = FormletContext.NextId fc
       let isChecked =
         match m with
         | Model.Value "on"  -> true
@@ -180,7 +180,7 @@ module Formlet =
       options
       |> Array.mapi (fun i (v, _) -> option [|Value (string i)|] [|str v|])
 
-    Ft <| fun ig fp m d ->
+    Ft <| fun fc mp m d ->
       let i =
         match m with
         | Model.Value v ->
@@ -207,8 +207,8 @@ module Formlet =
   /// Adds a validation feedback to a Formlet
   let inline withValidationFeedback t : Formlet<_> =
     let t = adapt t
-    Ft <| fun ig fp m d ->
-      let tv, tvt, tft  = invoke t ig fp m d
+    Ft <| fun fc mp m d ->
+      let tv, tvt, tft  = invoke t fc mp m d
       if isGood tft then
         tv, tvt, tft
       else
