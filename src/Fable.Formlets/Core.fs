@@ -302,6 +302,13 @@ module Formlet =
 
       f tv, tvt, tft
 
+  // Injects a static view
+  let inline staticView re : Formlet<unit> =
+    Ft <| fun fc mp m d ->
+      (), ViewTree.Element re, zero()
+
+  // Creates a named sub model
+  //  Useful to prevent unintentional preservation of values when switching views
   let inline withSubModel n t : Formlet<_> =
     let t = adapt t
     Ft <| fun fc mp m d ->
