@@ -248,8 +248,6 @@ module Formlet =
     Ft <| fun fc mp m d ->
       v, zero (), zero ()
 
-  let inline lift v = value v
-
   /// Monadic bind for Formlets, usually you should try to use
   ///   apply over bind as it is allows for better caching of resources.
   let inline bind t uf : Formlet<_> =
@@ -266,9 +264,6 @@ module Formlet =
       let uv, uvt, uft  = invoke u fc mp um (right d)
 
       uv, join tvt uvt, join tft uft
-
-  let inline unlift t : Formlet<_> =
-    bind t id
 
   // Combines the result of two formlets using a combination function
   let inline combine f t u : Formlet<_> =
@@ -295,12 +290,21 @@ module Formlet =
   let inline keepRight t u : Formlet<_> = combine Combinations.keepRight t u
 
   /// Functor map
-  let inline map t f : Formlet<_> =
+  let inline map f t : Formlet<_> =
     let t = adapt t
     Ft <| fun fc mp m d ->
       let tv, tvt, tft  = invoke t fc mp m d
 
       f tv, tvt, tft
+
+  let inline unlift t : Formlet<_>  = bind t id
+
+  let inline lift0 v                = value v
+  let inline lift1 f t              = map f t
+  let inline lift2 f t0 t1          = apply (apply (value f) t0) t1
+  let inline lift3 f t0 t1 t2       = apply (lift2 f t0 t1) t2
+  let inline lift4 f t0 t1 t2 t3    = apply (lift3 f t0 t1 t2) t3
+  let inline lift5 f t0 t1 t2 t3 t4 = apply (lift4 f t0 t1 t2 t3) t4
 
   // Injects a static view
   let inline staticView re : Formlet<unit> =
@@ -387,7 +391,7 @@ let formlet = Formlet.Builder ()
 type Formlet<'T> with
   static member inline (>>=) (t, uf) = Formlet.bind  t uf
   static member inline (<*>) (f, t)  = Formlet.apply f t
-  static member inline (|>>) (t, f)  = Formlet.map   t f
+  static member inline (|>>) (t, f)  = Formlet.map   f t
 
   static member inline (<&>) (f, t)  = Formlet.andAlso   f t
   static member inline (.>>.)(f, t)  = Formlet.andAlso   f t

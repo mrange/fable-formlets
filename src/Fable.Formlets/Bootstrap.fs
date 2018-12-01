@@ -226,7 +226,7 @@ module Formlet =
   ///   shows the visual element for t.
   ///   Requires an id to associate the label with the visual element
   let inline withOption lbl t : Formlet<_ option> =
-    checkBox lbl >>= (fun v -> if v then Formlet.map t Some else Formlet.value None)
+    checkBox lbl >>= (fun v -> if v then Formlet.map Some t else Formlet.value None)
 
   /// Wraps the Formlet in a div with class "form-group"
   let inline withFormGroup t = Formlet.withContainer div t |> Formlet.withClass "form-group"
