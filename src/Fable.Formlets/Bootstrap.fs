@@ -124,6 +124,25 @@ module Formlet =
 
       tv, tvt, tft
 
+  /// Primitive button input formlet
+  let inline button lbl : Formlet<float> =
+    let btn = flip button [|str lbl|]
+    Ft <| fun fc mp m d ->
+      let v =
+        match m with
+        | Model.Number v  -> v
+        | _               -> 0.0
+
+      let aa : IHTMLProp list =
+          [
+            OnClick <| fun _ -> number d (v + 1.0)
+            Type    "button"
+          ]
+
+      let tvt = delayedElement btn aa "btn" []
+
+      v, tvt, zero ()
+
   /// Primitive text input formlet
   let inline text hint initial : Formlet<string> =
     Ft <| fun fc mp m d ->
@@ -176,9 +195,10 @@ module Formlet =
   let inline select initial (options : (string*'T) array) : Formlet<'T> =
     if options.Length = 0 then failwithf "select requires 1 or more options"
 
-    let options_ =
+    let opts =
       options
       |> Array.mapi (fun i (v, _) -> option [|Value (string i)|] [|str v|])
+    let sel = flip select opts
 
     Ft <| fun fc mp m d ->
       let i =
@@ -194,8 +214,7 @@ module Formlet =
             Value     (string i)
           ]
 
-      let d     = flip select options_
-      let tvt   = delayedElement d aa "form-control" []
+      let tvt   = delayedElement sel aa "form-control" []
 
       let v = options.[i]
 
