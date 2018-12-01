@@ -27,9 +27,26 @@ open Fable.Formlets.Core.Details
 
 open System.Text
 
+type IFormletComponent =
+  interface
+    abstract processorConnected     : unit -> unit
+    abstract processorDisconnected  : unit -> unit
+    abstract updateModel            : Model -> unit
+  end
+
+[<RequireQualifiedAccess>]
+type FormletProcessorMessage =
+  | Quit
+  | Set       of IFormletComponent
+  | Delta     of ModelUpdate
+  | Update
+
+type FormletProcessor = MailboxProcessor<FormletProcessorMessage>
+
 type FormletProps<'T> =
   {
     Formlet   : Formlet<'T>
+    Processor : FormletProcessor
     OnCommit  : 'T -> unit
     OnCancel  : unit -> unit
   }
@@ -45,8 +62,13 @@ type FormletComponent<'T>(initialProps : FormletProps<'T>) =
   do
     base.setInitState FormletState.Zero
 
-  member x.updateModel mu : unit =
-    x.setState (fun m _ -> { Model = Formlet.update m.Model mu })
+  interface IFormletComponent with
+    member x.processorConnected     () = ()
+    member x.processorDisconnected  () = ()
+    member x.updateModel            m  = x.setState (fun _ _ -> { Model = m })
+
+  member x.dispatchUpdate mu : unit =
+    x.props.Processor.Post (FormletProcessorMessage.Delta mu)
 
   member x.commit tv : unit =
     x.props.OnCommit tv
@@ -55,13 +77,13 @@ type FormletComponent<'T>(initialProps : FormletProps<'T>) =
     x.props.OnCancel ()
 
   member x.reset () : unit =
-    x.setState (fun m _ -> { Model = Model.Empty })
+    x.setState (fun _ _ -> { Model = Model.Empty })
 
   override x.render() : ReactElement =
     let t             = x.props.Formlet
     let t             = adapt t
     let fc            = FormletContext.New 1000
-    let tv, tvt, tft  = invoke t fc [] x.state.Model (Dispatcher.D x.updateModel)
+    let tv, tvt, tft  = invoke t fc [] x.state.Model (Dispatcher.D x.dispatchUpdate)
 
     let tes           = flatten tvt
     let tfs           = flatten tft
@@ -253,5 +275,39 @@ module Formlet =
   // Creates a Form element from a formlet
   //  onCommit is called when user clicks Commit
   //  onCancel is called when user clicks Cancel
-  let inline mkForm formlet onCommit onCancel : ReactElement =
-    ofType<FormletComponent<_>,_,_> { Formlet = formlet; OnCommit = onCommit; OnCancel = onCancel } []
+  let inline mkForm formlet processor onCommit onCancel : ReactElement =
+    ofType<FormletComponent<_>,_,_> { Formlet = formlet; Processor = processor; OnCommit = onCommit; OnCancel = onCancel } []
+
+  let inline mkProcessor () = 
+    let processor (mbp : MailboxProcessor<FormletProcessorMessage>) = 
+      let rec loop (comp : IFormletComponent option) (model : Model) (deltas : ModelUpdate list) =
+        let folder d s = Formlet.update s d
+        async {
+          let! receive = mbp.Receive ()
+          printfn "Received: %A" receive
+          return! 
+            match receive with
+            | FormletProcessorMessage.Quit     -> 
+              async.Return ()
+            | FormletProcessorMessage.Set c    -> 
+              match comp with
+              | Some c -> c.processorDisconnected ()
+              | None   -> ()
+              c.processorConnected ()
+              c.updateModel model
+              loop (Some c) model deltas
+            | FormletProcessorMessage.Delta mu ->
+              mbp.Post FormletProcessorMessage.Update
+              loop comp model (mu::deltas)
+            | FormletProcessorMessage.Update   ->
+              if deltas |> List.isEmpty then loop comp model deltas
+              else
+                let model = List.foldBack folder deltas model
+                match comp with
+                | Some c -> c.updateModel model
+                | None   -> ()
+                loop comp model deltas
+        }
+      loop None Model.Empty []
+    MailboxProcessor.Start processor
+

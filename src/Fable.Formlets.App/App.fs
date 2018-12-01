@@ -153,8 +153,12 @@ let sampleFormlet =
   // Note the user of withOption to create an optional delivery address input
   <*> (address "Delivery address" |> Formlet.withOption "Use delivery address?")
 
+let sampleFormlet2 = Formlet.button "Click me!"
+
 let onCommit tv = printfn "Success: %A" tv
 let onCancel () = printfn "Cancelled"
 
-let element = Formlet.mkForm sampleFormlet onCommit onCancel
+let processor = Formlet.mkProcessor ()
+let element = Formlet.mkForm sampleFormlet2 processor onCommit onCancel
 ReactDom.render(element, document.getElementById("react-app"))
+processor.Post FormletProcessorMessage.Quit
