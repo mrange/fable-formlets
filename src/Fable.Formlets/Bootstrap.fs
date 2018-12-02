@@ -79,6 +79,9 @@ type FormletComponent<'T>(initialProps : FormletProps<'T>) =
   member x.reset () : unit =
     x.setState (fun _ _ -> { Model = Model.Empty })
 
+  override x.componentWillMount () =
+    x.props.Processor.Post (FormletProcessorMessage.Set x)
+
   override x.render() : ReactElement =
     let t             = x.props.Formlet
     let t             = adapt t
@@ -281,32 +284,39 @@ module Formlet =
   let inline mkProcessor () = 
     let processor (mbp : MailboxProcessor<FormletProcessorMessage>) = 
       let rec loop (comp : IFormletComponent option) (model : Model) (deltas : ModelUpdate list) =
-        let folder d s = Formlet.update s d
+        let folder = flip Formlet.update
         async {
           let! receive = mbp.Receive ()
-          printfn "Received: %A" receive
-          return! 
-            match receive with
-            | FormletProcessorMessage.Quit     -> 
-              async.Return ()
-            | FormletProcessorMessage.Set c    -> 
-              match comp with
-              | Some c -> c.processorDisconnected ()
-              | None   -> ()
-              c.processorConnected ()
-              c.updateModel model
-              loop (Some c) model deltas
-            | FormletProcessorMessage.Delta mu ->
-              mbp.Post FormletProcessorMessage.Update
-              loop comp model (mu::deltas)
-            | FormletProcessorMessage.Update   ->
-              if deltas |> List.isEmpty then loop comp model deltas
-              else
-                let model = List.foldBack folder deltas model
+          printfn "FormletProcessor - Received: %A" receive
+          let result =
+            try
+              match receive with
+              | FormletProcessorMessage.Quit     -> 
+                async.Return ()
+              | FormletProcessorMessage.Set c    -> 
                 match comp with
-                | Some c -> c.updateModel model
+                | Some c -> c.processorDisconnected ()
                 | None   -> ()
-                loop comp model deltas
+                c.processorConnected ()
+                c.updateModel model
+                loop (Some c) model deltas
+              | FormletProcessorMessage.Delta mu ->
+                mbp.Post FormletProcessorMessage.Update
+                loop comp model (mu::deltas)
+              | FormletProcessorMessage.Update   ->
+                if deltas |> List.isEmpty then 
+                  loop comp model []
+                else
+                  let model = List.foldBack folder deltas model
+                  match comp with
+                  | Some c -> c.updateModel model
+                  | None   -> ()
+                  loop comp model []
+            with
+            | e -> 
+              printfn "FormletProcessor - Exception: %s" e.Message
+              loop comp model deltas
+          return! result
         }
       loop None Model.Empty []
     MailboxProcessor.Start processor

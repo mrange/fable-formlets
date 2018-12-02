@@ -159,6 +159,5 @@ let onCommit tv = printfn "Success: %A" tv
 let onCancel () = printfn "Cancelled"
 
 let processor = Formlet.mkProcessor ()
-let element = Formlet.mkForm sampleFormlet2 processor onCommit onCancel
+let element = Formlet.mkForm sampleFormlet processor onCommit onCancel
 ReactDom.render(element, document.getElementById("react-app"))
-processor.Post FormletProcessorMessage.Quit
