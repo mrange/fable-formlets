@@ -27,22 +27,6 @@ open Fable.Formlets.Core.Details
 
 open System.Text
 
-type IFormletComponent =
-  interface
-    abstract processorConnected     : unit -> unit
-    abstract processorDisconnected  : unit -> unit
-    abstract updateModel            : Model -> unit
-  end
-
-[<RequireQualifiedAccess>]
-type FormletProcessorMessage =
-  | Quit
-  | Set       of IFormletComponent
-  | Delta     of ModelUpdate
-  | Update
-
-type FormletProcessor = MailboxProcessor<FormletProcessorMessage>
-
 type FormletProps<'T> =
   {
     Formlet   : Formlet<'T>
@@ -280,44 +264,3 @@ module Formlet =
   //  onCancel is called when user clicks Cancel
   let inline mkForm formlet processor onCommit onCancel : ReactElement =
     ofType<FormletComponent<_>,_,_> { Formlet = formlet; Processor = processor; OnCommit = onCommit; OnCancel = onCancel } []
-
-  let inline mkProcessor () = 
-    let processor (mbp : MailboxProcessor<FormletProcessorMessage>) = 
-      let rec loop (comp : IFormletComponent option) (model : Model) (deltas : ModelUpdate list) =
-        let folder = flip Formlet.update
-        async {
-          let! receive = mbp.Receive ()
-          printfn "FormletProcessor - Received: %A" receive
-          let result =
-            try
-              match receive with
-              | FormletProcessorMessage.Quit     -> 
-                async.Return ()
-              | FormletProcessorMessage.Set c    -> 
-                match comp with
-                | Some c -> c.processorDisconnected ()
-                | None   -> ()
-                c.processorConnected ()
-                c.updateModel model
-                loop (Some c) model deltas
-              | FormletProcessorMessage.Delta mu ->
-                mbp.Post FormletProcessorMessage.Update
-                loop comp model (mu::deltas)
-              | FormletProcessorMessage.Update   ->
-                if deltas |> List.isEmpty then 
-                  loop comp model []
-                else
-                  let model = List.foldBack folder deltas model
-                  match comp with
-                  | Some c -> c.updateModel model
-                  | None   -> ()
-                  loop comp model []
-            with
-            | e -> 
-              printfn "FormletProcessor - Exception: %s" e.Message
-              loop comp model deltas
-          return! result
-        }
-      loop None Model.Empty []
-    MailboxProcessor.Start processor
-

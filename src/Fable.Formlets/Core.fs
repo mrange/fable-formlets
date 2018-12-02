@@ -133,6 +133,22 @@ type Dispatcher =
 ///   and dispatcher function generates a value 'T, the view tree and the failure tree.
 type Formlet<'T> = Ft of (FormletContext -> ModelPath -> Model -> Dispatcher -> 'T*ViewTree*FailureTree)
 
+type IFormletComponent =
+  interface
+    abstract processorConnected     : unit -> unit
+    abstract processorDisconnected  : unit -> unit
+    abstract updateModel            : Model -> unit
+  end
+
+[<RequireQualifiedAccess>]
+type FormletProcessorMessage =
+  | Quit
+  | Set       of IFormletComponent
+  | Delta     of ModelUpdate
+  | Update
+
+type FormletProcessor = MailboxProcessor<FormletProcessorMessage>
+
 module Details =
   // TODO: Why doesn't this work?
   //let inline adapt  (Ft f)        = OptimizedClosures.FSharpFunc<_, _, _, _, _>.Adapt f
@@ -216,6 +232,41 @@ module Details =
         | ViewTree.Fork           (l, r)  ->
           flatten ra aa cc ss l
           flatten ra aa cc ss r
+
+    module Formlet =
+      let rec processor (mbp : MailboxProcessor<FormletProcessorMessage>) merge (comp : IFormletComponent option) (model : Model) (deltas : ModelUpdate list) =
+        async {
+          let! receive = mbp.Receive ()
+          let result =
+            try
+              match receive with
+              | FormletProcessorMessage.Quit     ->
+                async.Return ()
+              | FormletProcessorMessage.Set c    ->
+                match comp with
+                | Some c -> c.processorDisconnected ()
+                | None   -> ()
+                c.processorConnected ()
+                c.updateModel model
+                processor mbp merge (Some c) model deltas
+              | FormletProcessorMessage.Delta mu ->
+                mbp.Post FormletProcessorMessage.Update
+                processor mbp merge comp model (mu::deltas)
+              | FormletProcessorMessage.Update   ->
+                if deltas |> List.isEmpty then
+                  processor mbp merge comp model []
+                else
+                  let model = merge model deltas
+                  match comp with
+                  | Some c -> c.updateModel model
+                  | None   -> ()
+                  processor mbp merge comp model []
+            with
+            | e ->
+              printfn "FormletProcessor - Exception: %s" e.Message
+              processor mbp merge comp model deltas
+          return! result
+        }
 
   module Combinations =
     let apply     f s = f s
@@ -375,6 +426,11 @@ module Formlet =
       let tvt           = join (ViewTree.Element e) tvt
 
       tv, tvt, tft
+
+  let inline mkProcessor () =
+    let merge m ds    = List.foldBack (flip update) ds m
+    let processor mbp = Loops.Formlet.processor mbp merge None (zero ()) []
+    MailboxProcessor.Start processor
 
   /// Computation expression builder for formlets
   type Builder () =
